@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador de Azure · Costa Azul</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  --rojo: #E30613; --gris: #58585A; --fondo: #F4F4F5; --borde: #D9D9DC;
+  --term: #0C0C0C; --term-txt: #E6E6E6; --term-dim: #9A9A9A; --ok: #6CCB5F; --err: #FF6B6B; --cmd: #FFFFFF; --prompt: #3BA5F2;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--fondo); color: #1D1D1F; display: flex; flex-direction: column; }
+header { background: #FFFFFF; border-bottom: 3px solid var(--rojo); padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+header .tit { font-weight: 700; font-size: 15px; }
+header .sub { font-size: 12px; color: var(--gris); }
+header .esp { flex: 1; }
+button { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--borde); background: #FFFFFF; cursor: pointer; }
+button.prim { background: var(--rojo); color: #FFFFFF; border-color: var(--rojo); font-weight: 600; }
+button:hover { filter: brightness(0.96); }
+#sesion { font-size: 12px; background: #F0F0F2; border-radius: 12px; padding: 4px 10px; color: var(--gris); }
+main { flex: 1; display: flex; min-height: 0; }
+#term { flex: 1; background: var(--term); color: var(--term-txt); font-family: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace; font-size: 13.5px; line-height: 1.45; padding: 10px 14px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; }
+#term .cmd { color: var(--cmd); }
+#term .pr { color: var(--prompt); }
+#term .err { color: var(--err); }
+#term .ok { color: var(--ok); }
+#term .dim { color: var(--term-dim); }
+#term .res { white-space: pre; overflow-x: auto; }
+#linea { display: flex; }
+#entrada { flex: 1; background: transparent; border: 0; outline: 0; color: var(--cmd); font: inherit; padding: 0; caret-color: var(--term-txt); }
+#panel { width: 420px; max-width: 46vw; background: #FFFFFF; border-left: 1px solid var(--borde); overflow-y: auto; padding: 14px 16px; font-size: 13px; line-height: 1.5; }
+#panel.oculto { display: none; }
+#panel h2 { font-size: 15px; margin: 0 0 6px; }
+#panel h3 { font-size: 13px; margin: 14px 0 4px; color: var(--rojo); text-transform: uppercase; letter-spacing: .04em; }
+#panel p { margin: 4px 0 8px; }
+#panel code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11.5px; background: #F3F3F5; padding: 1px 4px; border-radius: 3px; word-break: break-all; }
+#panel table { border-collapse: collapse; width: 100%; font-size: 12px; }
+#panel td { border-top: 1px solid var(--borde); padding: 5px 4px; vertical-align: top; }
+#panel td:first-child { width: 34%; font-weight: 600; }
+.nota { font-size: 11.5px; color: var(--gris); }
+@media (max-width: 760px) { main { flex-direction: column; } #panel { width: auto; max-width: none; max-height: 45vh; border-left: 0; border-top: 1px solid var(--borde); } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="tit">Simulador de Azure · Terminal de Buses Costa Azul</div>
+    <div class="sub">TI3V62 · Gestión de Seguridad de la Información · Parte A de la actividad de laboratorio</div>
+  </div>
+  <span class="esp"></span>
+  <span id="sesion">Sesión: administrador</span>
+  <button id="bPanel">Instrucciones</button>
+  <button id="bReinicio">Reiniciar</button>
+  <button id="bDescarga" class="prim">Descargar transcripción</button>
+</header>
+<main>
+  <div id="term" tabindex="0"><div id="salida"></div><div id="linea"><span id="pr" class="pr"></span><input id="entrada" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Línea de comandos"></div></div>
+  <aside id="panel">
+    <h2>Instrucciones</h2>
+    <p>Esta consola reproduce Azure Cloud Shell. Desarrolle la Parte A (Pasos A0 a A3) escribiendo <strong>los comandos de la guía de laboratorio, tal como están escritos</strong>. La consola responde como lo haría Azure y conserva lo que usted crea, asigna o modifica.</p>
+    <p>Un comando mal escrito produce un error, igual que en Azure: corríjalo y vuelva a ejecutarlo. Los errores corregidos forman parte de la evidencia.</p>
+
+    <h3>Antes de comenzar</h3>
+    <p>Incluya en el informe, como <strong>hallazgo inicial</strong>, el mensaje de error que obtuvo al intentar trabajar en Azure con su cuenta («Insufficient privileges», «Sin acceso 401» u otro), y explique qué control de seguridad lo produjo y qué principio aplica.</p>
+
+    <h3>Lo que en la guía se hace en el portal</h3>
+    <table>
+      <tr><td>Medida 3 · valores predeterminados de seguridad</td><td>Consultar: <code>az rest --method get --url https://graph.microsoft.com/v1.0/policies/identitySecurityDefaultsEnforcementPolicy</code><br>Habilitar: el mismo comando con <code>--method patch --body '{"isEnabled": true}'</code></td></tr>
+      <tr><td>Medida 3 · primer ingreso de rmorales y pcortes</td><td><code>az login -u rmorales@$DOM -p '&lt;clave inicial&gt;'</code><br>La consola solicita la nueva contraseña y el registro del segundo factor.</td></tr>
+      <tr><td>Medida 4 · cambiar de sesión</td><td><code>az login -u ...</code> abre la sesión de otra persona. <code>az logout</code> vuelve a la sesión del administrador. Cada sesión tiene sus propias variables.</td></tr>
+      <tr><td>Medida 4 · la cuenta compartida</td><td><code>az login -u encomiendas@$DOM -p '&lt;clave&gt;'</code></td></tr>
+      <tr><td>Paso A3 · registros de Microsoft Entra</td><td><code>az rest --method get --url https://graph.microsoft.com/v1.0/auditLogs/directoryAudits -o table</code><br>y con <code>auditLogs/signIns</code> para los inicios de sesión.</td></tr>
+    </table>
+
+    <h3>La evidencia</h3>
+    <p>El botón <strong>Descargar transcripción</strong> entrega un archivo de texto con toda la sesión. Reemplaza las imágenes del portal que pide la guía y se adjunta en el anexo del informe. Descárguela al terminar cada paso.</p>
+    <p class="nota">El simulador guarda el avance en este navegador: si cierra la página, al abrirla de nuevo continúa donde quedó. «Reiniciar» borra todo. No se conecta a ningún servicio externo.</p>
+    <p class="nota">Comandos de apoyo: <code>help</code>, <code>clear</code>, <code>history</code>, <code>ls</code>, <code>cat</code>. Las flechas recuperan comandos anteriores.</p>
+  </aside>
+</main>
+
+<script id="motor">
+/* ===================== Motor del simulador ===================== */
+function crearSimulador(estadoInicial, ahora) {
+  const SUB = '3f2a6c1e-8b4d-4c7a-9e21-5d0b7f3a9c44';
+  const TENANT = '9c1e2b7d-5a40-4e8f-b3c6-71d24f0a4a7d';
+  const DOMINIO = 'terminalcostaazul.onmicrosoft.com';
+  const ADMIN = 'administrador@' + DOMINIO;
+  const SUBID = '/subscriptions/' + SUB;
+  const ROLES = {
+    'Owner': { control: 'all', datos: false },
+    'Contributor': { control: 'write', datos: false },
+    'Reader': { control: 'read', datos: false },
+    'User Access Administrator': { control: 'roles', datos: false },
+    'Monitoring Reader': { control: 'monitor', datos: false },
+    'Storage Blob Data Owner': { control: 'none', datos: 'write' },
+    'Storage Blob Data Contributor': { control: 'none', datos: 'write' },
+    'Storage Blob Data Reader': { control: 'none', datos: 'read' },
+  };
+
+  let E = estadoInicial || {
+    reloj: ahora || Date.now(),
+    users: {},
+    groups: {},
+    rgs: {},
+    sa: {},
+    roles: [],
+    actividad: [],
+    auditoria: [],
+    ingresos: [],
+    archivos: {},
+    secDefaults: false,
+    sesion: ADMIN,
+    vars: {},
+    hist: [],
+  };
+  if (!estadoInicial) {
+    E.users[ADMIN] = { id: uid(), displayName: 'Administrador de la suscripción', enabled: true, mustChange: false, mfa: true, password: null };
+    E.roles.push({ id: uid(), principalId: E.users[ADMIN].id, principalName: ADMIN, principalType: 'User', role: 'Owner', scope: SUBID });
+  }
+
+  function uid() {
+    const h = () => Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
+    return h() + h() + '-' + h() + '-4' + h().slice(1) + '-a' + h().slice(1) + '-' + h() + h() + h();
+  }
+  function tic() { E.reloj += 4000 + Math.floor(Math.random() * 9000); return new Date(E.reloj).toISOString().replace('Z', '000Z'); }
+  function vars() { if (!E.vars[E.sesion]) E.vars[E.sesion] = {}; return E.vars[E.sesion]; }
+
+  /* ---------- Errores y salida ---------- */
+  class Falla extends Error { constructor(msg, codigo) { super(msg); this.codigo = codigo || 1; } }
+  const ERR = (m) => { throw new Falla(m); };
+
+  /* ---------- Subconjunto de JMESPath ---------- */
+  function jmes(q, dato) {
+    let i = 0; const s = q.trim();
+    function ws() { while (i < s.length && /\s/.test(s[i])) i++; }
+    function ident() { ws(); let j = i; while (j < s.length && /[A-Za-z0-9_$@]/.test(s[j])) j++; if (j === i) throw new Falla("argument --query: invalid jmespath_type value: '" + q + "'"); const r = s.slice(i, j); i = j; return r; }
+    function cadena() {
+      const pasos = [];
+      for (;;) {
+        ws();
+        if (i >= s.length || s[i] === ',' || s[i] === ']' || s[i] === '}') break;
+        if (s.startsWith('[]', i)) { pasos.push({ t: 'proy' }); i += 2; continue; }
+        if (s[i] === '.') { i++; continue; }
+        if (s[i] === '[') { i++; const l = []; for (;;) { l.push(cadena()); ws(); if (s[i] === ',') { i++; continue; } if (s[i] === ']') { i++; break; } throw new Falla("argument --query: invalid jmespath_type value: '" + q + "'"); } pasos.push({ t: 'lista', l }); continue; }
+        if (s[i] === '{') { i++; const h = []; for (;;) { const k = ident(); ws(); if (s[i] !== ':') throw new Falla("argument --query: invalid jmespath_type value: '" + q + "'"); i++; h.push([k, cadena()]); ws(); if (s[i] === ',') { i++; continue; } if (s[i] === '}') { i++; break; } throw new Falla("argument --query: invalid jmespath_type value: '" + q + "'"); } pasos.push({ t: 'hash', h }); continue; }
+        pasos.push({ t: 'campo', k: ident() });
+      }
+      return pasos;
+    }
+    function evaluar(pasos, v) {
+      for (let p = 0; p < pasos.length; p++) {
+        const x = pasos[p];
+        if (v === null || v === undefined) return null;
+        if (x.t === 'proy') { if (!Array.isArray(v)) return null; const resto = pasos.slice(p + 1); return v.map(e => evaluar(resto, e)).filter(e => e !== null && e !== undefined); }
+        if (x.t === 'campo') { v = (typeof v === 'object' && !Array.isArray(v)) ? v[x.k] : null; continue; }
+        if (x.t === 'lista') { const b = v; v = x.l.map(c => { const r = evaluar(c, b); return r === undefined ? null : r; }); continue; }
+        if (x.t === 'hash') { const b = v; const o = {}; x.h.forEach(([k, c]) => { const r = evaluar(c, b); o[k] = r === undefined ? null : r; }); v = o; continue; }
+      }
+      return v === undefined ? null : v;
+    }
+    const pasos = cadena(); ws();
+    if (i < s.length) throw new Falla("argument --query: invalid jmespath_type value: '" + q + "'");
+    return evaluar(pasos, dato);
+  }
+
+  /* ---------- Formatos de salida ---------- */
+  function escalar(v) { if (v === null || v === undefined) return ''; if (typeof v === 'boolean') return v ? 'True' : 'False'; if (typeof v === 'object') return JSON.stringify(v); return String(v); }
+  function tabla(v) {
+    if (v === null || v === undefined) return '';
+    let filas, enc;
+    const cap = k => k.charAt(0).toUpperCase() + k.slice(1);
+    if (!Array.isArray(v)) v = [v];
+    if (v.length === 0) return '';
+    if (Array.isArray(v[0])) { const n = Math.max(...v.map(r => r.length)); enc = Array.from({ length: n }, (_, j) => 'Column' + (j + 1)); filas = v.map(r => enc.map((_, j) => escalar(r[j]))); }
+    else if (typeof v[0] === 'object') { enc = Object.keys(v[0]).filter(k => v.some(r => r[k] === null || typeof r[k] !== 'object')); filas = v.map(r => enc.map(k => escalar(r[k]))); enc = enc.map(cap); }
+    else { enc = ['Result']; filas = v.map(x => [escalar(x)]); }
+    const an = enc.map((h, j) => Math.max(h.length, ...filas.map(f => f[j].length)));
+    const lin = (cs) => cs.map((c, j) => c.padEnd(an[j])).join('  ').trimEnd();
+    return [lin(enc), lin(an.map(a => '-'.repeat(a))), ...filas.map(lin)].join('\n');
+  }
+  function tsv(v) {
+    if (v === null || v === undefined) return '';
+    if (!Array.isArray(v)) return typeof v === 'object' ? Object.values(v).map(escalar).join('\t') : escalar(v);
+    return v.map(r => Array.isArray(r) ? r.map(escalar).join('\t') : (typeof r === 'object' && r !== null ? Object.values(r).map(escalar).join('\t') : escalar(r))).join('\n');
+  }
+  function salida(v, op) {
+    if (op.query !== undefined) v = jmes(op.query, v);
+    const o = op.o || op.output || 'json';
+    if (o === 'none') return '';
+    if (o === 'tsv') return tsv(v);
+    if (o === 'table') return tabla(v);
+    if (o === 'json' || o === 'jsonc') return v === null || v === undefined ? '' : JSON.stringify(v, null, 2);
+    ERR("argument --output/-o: invalid choice: '" + o + "' (choose from 'json', 'jsonc', 'none', 'table', 'tsv', 'yaml', 'yamlc')");
+  }
+
+  /* ---------- Shell: palabras, variables y comillas ---------- */
+  function expandir(txt) {
+    return txt.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, a, b) => { const k = a || b; const v = vars()[k]; return v === undefined ? '' : v; });
+  }
+  function palabras(linea) {
+    const out = []; let cur = null; let i = 0;
+    const push = () => { if (cur !== null) out.push(cur); cur = null; };
+    while (i < linea.length) {
+      const c = linea[i];
+      if (/\s/.test(c)) { push(); i++; continue; }
+      if (c === '|' || c === '>') { push(); out.push({ op: c }); i++; continue; }
+      if (c === "'") { const j = linea.indexOf("'", i + 1); if (j < 0) ERR('bash: unexpected EOF while looking for matching `\'\''); cur = (cur || '') + linea.slice(i + 1, j); i = j + 1; continue; }
+      if (c === '"') {
+        let j = i + 1, t = '';
+        while (j < linea.length && linea[j] !== '"') { if (linea[j] === '\\' && j + 1 < linea.length && '"\\$'.includes(linea[j + 1])) { t += linea[j + 1]; j += 2; continue; } t += linea[j]; j++; }
+        if (j >= linea.length) ERR('bash: unexpected EOF while looking for matching `"\'');
+        cur = (cur || '') + expandirSust(t); i = j + 1; continue;
+      }
+      if (c === '$' && linea[i + 1] === '(') {
+        let prof = 0, j = i + 1;
+        for (; j < linea.length; j++) { if (linea[j] === '(') prof++; else if (linea[j] === ')') { prof--; if (prof === 0) break; } }
+        if (j >= linea.length) ERR('bash: unexpected EOF while looking for matching `)\'');
+        cur = (cur || '') + sustituir(linea.slice(i + 2, j)); i = j + 1; continue;
+      }
+      if (c === '$') { const m = /^\$(\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)/.exec(linea.slice(i)); if (m) { cur = (cur || '') + expandir(m[0]); i += m[0].length; continue; } }
+      cur = (cur || '') + c; i++;
+    }
+    push();
+    return out;
+  }
+  function expandirSust(t) {
+    let r = '', i = 0;
+    while (i < t.length) {
+      if (t[i] === '$' && t[i + 1] === '(') { let prof = 0, j = i + 1; for (; j < t.length; j++) { if (t[j] === '(') prof++; else if (t[j] === ')') { prof--; if (prof === 0) break; } } r += sustituir(t.slice(i + 2, j)); i = j + 1; continue; }
+      r += t[i]; i++;
+    }
+    return expandir(r);
+  }
+  function sustituir(cmd) {
+    const r = ejecutarLinea(cmd, true);
+    if (r.err) throw new Falla(r.err);
+    return r.out.replace(/\n+$/, '');
+  }
+
+  /* ---------- Argumentos de az ---------- */
+  function opciones(args) {
+    const op = {}; const pos = [];
+    const alias = { '-n': '--name', '-g': '--resource-group', '-c': '--container-name', '-o': '--output', '-u': '--username', '-p': '--password' };
+    for (let i = 0; i < args.length; i++) {
+      let a = args[i];
+      if (a.startsWith('-')) {
+        a = alias[a] || a;
+        const k = a.replace(/^--?/, '');
+        const sig = args[i + 1];
+        if (sig === undefined || (sig.startsWith('--') ) || (/^-[a-z]$/.test(sig))) { op[k] = true; }
+        else { op[k] = sig; i++; }
+      } else pos.push(a);
+    }
+    if (op['output'] !== undefined) op.o = op['output'];
+    return { op, pos };
+  }
+  function req(op, ...ks) {
+    const faltan = ks.filter(k => { const v = op[k.split('|')[0]] ?? op[k.split('|')[1]]; return v === undefined || v === true || v === ''; });
+    if (faltan.length) ERR('the following arguments are required: ' + faltan.map(k => '--' + k.split('|')[0]).join(', '));
+  }
+  function bool(v, nombre) { if (v === 'true' || v === true) return true; if (v === 'false') return false; ERR("argument --" + nombre + ": invalid boolean value: '" + v + "'"); }
+
+  /* ---------- Autorización ---------- */
+  function principalesDe(upn) { const u = E.users[upn]; if (!u) return []; const ids = [u.id]; Object.values(E.groups).forEach(g => { if (g.members.includes(u.id)) ids.push(g.id); }); return ids; }
+  function rolesEn(upn, scope) { const ids = principalesDe(upn); return E.roles.filter(r => ids.includes(r.principalId) && (scope === r.scope || scope.toLowerCase().startsWith(r.scope.toLowerCase() + '/'))).map(r => r.role); }
+  function puede(scope, accion) {
+    const rs = rolesEn(E.sesion, scope).map(r => ROLES[r]);
+    if (accion === 'read') return rs.some(r => ['all', 'write', 'read', 'roles'].includes(r.control));
+    if (accion === 'write') return rs.some(r => ['all', 'write'].includes(r.control));
+    if (accion === 'roles') return rs.some(r => ['all', 'roles'].includes(r.control));
+    if (accion === 'monitor') return rs.some(r => ['all', 'write', 'read', 'monitor', 'roles'].includes(r.control));
+    if (accion === 'datos-read') return rs.some(r => r.datos === 'read' || r.datos === 'write');
+    if (accion === 'datos-write') return rs.some(r => r.datos === 'write');
+    return false;
+  }
+  function negar(scope, operacion, registrar) {
+    if (registrar !== false) actividad(operacion, 'Failed', scope);
+    ERR("(AuthorizationFailed) The client '" + E.sesion + "' with object id '" + E.users[E.sesion].id + "' does not have authorization to perform action '" + operacion + "' over scope '" + scope + "' or the scope is invalid. If access was recently granted, please refresh your credentials.\nCode: AuthorizationFailed");
+  }
+  function esAdminDirectorio() { return E.sesion === ADMIN; }
+
+  /* ---------- Registros ---------- */
+  function actividad(operacion, estado, scope) {
+    const m = /resourceGroups\/([^/]+)/i.exec(scope || '');
+    E.actividad.push({ eventTimestamp: tic(), caller: E.sesion, operationName: { value: operacion, localizedValue: operacion }, status: { value: estado, localizedValue: estado }, resourceGroupName: m ? m[1] : null, resourceId: scope, level: estado === 'Failed' ? 'Error' : 'Informational', subscriptionId: SUB });
+  }
+  function auditar(act, objetivo, resultado, quien) {
+    E.auditoria.push({ id: uid(), activityDateTime: tic(), activityDisplayName: act, category: act.includes('group') ? 'GroupManagement' : (act.includes('policy') ? 'Policy' : 'UserManagement'), result: resultado || 'success', initiatedBy: { user: { userPrincipalName: quien || E.sesion } }, targetResources: [{ displayName: objetivo, userPrincipalName: objetivo.includes('@') ? objetivo : null }] });
+  }
+  function ingreso(upn, codigo, motivo) {
+    E.ingresos.push({ id: uid(), createdDateTime: tic(), userPrincipalName: upn, appDisplayName: 'Azure Portal', ipAddress: '190.' + (40 + (upn.length % 50)) + '.' + (upn.charCodeAt(0) % 200) + '.' + (10 + upn.length), clientAppUsed: 'Browser', status: { errorCode: codigo, failureReason: motivo || null } });
+  }
+
+  /* ---------- Recursos ---------- */
+  const rgId = (n) => SUBID + '/resourceGroups/' + n;
+  const saId = (s) => rgId(E.sa[s].rg) + '/providers/Microsoft.Storage/storageAccounts/' + s;
+  function rgReal(n) { const k = Object.keys(E.rgs).find(x => x.toLowerCase() === String(n).toLowerCase()); return k; }
+  function exigirRg(n) { const k = rgReal(n); if (!k) ERR("(ResourceGroupNotFound) Resource group '" + n + "' could not be found.\nCode: ResourceGroupNotFound"); return k; }
+  function exigirSa(n, rg) { const s = E.sa[n]; if (!s || (rg && rgReal(rg) !== s.rg)) ERR("(ResourceNotFound) The Resource 'Microsoft.Storage/storageAccounts/" + n + "' under resource group '" + (rg || '') + "' was not found.\nCode: ResourceNotFound"); return s; }
+  function usuario(id) {
+    if (!id) ERR('the following arguments are required: --id');
+    let u = E.users[id] ? id : Object.keys(E.users).find(k => E.users[k].id === id);
+    if (!u) ERR("Resource '" + id + "' does not exist or one of its queried reference-property objects are not present.");
+    return u;
+  }
+  function vistaUsuario(upn) { const u = E.users[upn]; return { businessPhones: [], displayName: u.displayName, id: u.id, mail: null, userPrincipalName: upn, accountEnabled: u.enabled }; }
+  function grupo(g) { const k = Object.keys(E.groups).find(x => x === g || E.groups[x].id === g); if (!k) ERR('No group matches the name of \'' + g + '\''); return k; }
+  function vistaSa(n) {
+    const s = E.sa[n];
+    return { id: saId(n), name: n, location: s.location, kind: 'StorageV2', resourceGroup: s.rg, sku: { name: s.sku, tier: 'Standard' }, enableHttpsTrafficOnly: s.httpsOnly, minimumTlsVersion: s.tls, allowBlobPublicAccess: s.publico, encryption: { keySource: 'Microsoft.Storage', services: { blob: { enabled: true, keyType: 'Account' }, file: { enabled: true, keyType: 'Account' } } }, primaryEndpoints: { blob: 'https://' + n + '.blob.core.windows.net/' }, provisioningState: 'Succeeded', type: 'Microsoft.Storage/storageAccounts' };
+  }
+  function vistaRol(r) { return { id: SUBID + '/providers/Microsoft.Authorization/roleAssignments/' + r.id, name: r.id, principalId: r.principalId, principalName: r.principalName, principalType: r.principalType, roleDefinitionName: r.role, scope: r.scope, type: 'Microsoft.Authorization/roleAssignments' }; }
+
+  /* ---------- Comandos az ---------- */
+  function az(args) {
+    if (!args.length) return 'Bienvenido a la interfaz de línea de comandos de Azure (simulada).\nUse los comandos de la guía. Escriba help para ver los grupos disponibles.';
+    const grupoCmd = args.slice(0, 3).join(' ');
+    const { op } = opciones(args);
+    const dos = args.slice(0, 2).join(' ');
+
+    if (args[0] === 'login') return login(op);
+    if (args[0] === 'logout') { if (E.sesion === ADMIN) return 'No hay otra sesión abierta: ya está en la sesión del administrador.'; const s = E.sesion; E.sesion = ADMIN; return 'Sesión de ' + s + ' cerrada. Vuelve la sesión del administrador de la suscripción.'; }
+
+    if (dos === 'account show') {
+      return salida({ environmentName: 'AzureCloud', id: SUB, isDefault: true, name: 'Azure for Students', state: 'Enabled', tenantId: TENANT, user: { name: E.sesion, type: 'user' } }, op);
+    }
+    if (dos === 'account list') return salida([{ cloudName: 'AzureCloud', id: SUB, isDefault: true, name: 'Azure for Students', state: 'Enabled', tenantId: TENANT }], op);
+
+    if (grupoCmd === 'ad signed-in-user show') return salida(vistaUsuario(E.sesion), op);
+
+    if (grupoCmd === 'ad user create') {
+      req(op, 'display-name', 'user-principal-name', 'password');
+      const upn = op['user-principal-name'];
+      if (!/^[^@\s]+@[^@\s]+$/.test(upn)) ERR("The domain portion of the userPrincipalName property is invalid. You must use one of the verified domain names in your organization.");
+      if (upn.split('@')[1].toLowerCase() !== DOMINIO) ERR("Property userPrincipalName is invalid. The domain '" + upn.split('@')[1] + "' is not a verified domain of this directory.");
+      if (!esAdminDirectorio()) ERR('Insufficient privileges to complete the operation.');
+      if (E.users[upn]) ERR('Another object with the same value for property userPrincipalName already exists.');
+      if (String(op.password).length < 8) ERR('The specified password does not comply with password complexity requirements. Please provide a different password.');
+      E.users[upn] = { id: uid(), displayName: op['display-name'], enabled: true, mustChange: op['force-change-password-next-sign-in'] === 'true', mfa: false, password: String(op.password) };
+      auditar('Add user', upn);
+      return salida(vistaUsuario(upn), op);
+    }
+    if (grupoCmd === 'ad user delete') {
+      const u = usuario(op.id);
+      if (!esAdminDirectorio()) ERR('Insufficient privileges to complete the operation.');
+      delete E.users[u]; Object.values(E.groups).forEach(g => g.members = g.members.filter(m => m !== u));
+      auditar('Delete user', u); return '';
+    }
+    if (grupoCmd === 'ad user list') return salida(Object.keys(E.users).map(vistaUsuario), op);
+    if (grupoCmd === 'ad user show') return salida(vistaUsuario(usuario(op.id)), op);
+    if (grupoCmd === 'ad user update') {
+      const u = usuario(op.id);
+      if (!esAdminDirectorio()) ERR('Insufficient privileges to complete the operation.');
+      if (op['account-enabled'] !== undefined) { E.users[u].enabled = bool(op['account-enabled'], 'account-enabled'); auditar(E.users[u].enabled ? 'Enable account' : 'Disable account', u); auditar('Update user', u); }
+      if (op['display-name']) { E.users[u].displayName = op['display-name']; auditar('Update user', u); }
+      return '';
+    }
+    if (grupoCmd === 'ad group create') {
+      req(op, 'display-name', 'mail-nickname');
+      if (!esAdminDirectorio()) ERR('Insufficient privileges to complete the operation.');
+      const n = op['display-name'];
+      if (E.groups[n]) ERR("A group with the display name '" + n + "' already exists. Use a different name.");
+      E.groups[n] = { id: uid(), nick: op['mail-nickname'], members: [] };
+      auditar('Add group', n);
+      return salida({ displayName: n, id: E.groups[n].id, mailNickname: op['mail-nickname'], securityEnabled: true }, op);
+    }
+    if (grupoCmd === 'ad group show') { req(op, 'group'); const g = grupo(op.group); return salida({ displayName: g, id: E.groups[g].id, mailNickname: E.groups[g].nick, securityEnabled: true }, op); }
+    if (grupoCmd === 'ad group list') return salida(Object.keys(E.groups).map(g => ({ displayName: g, id: E.groups[g].id, mailNickname: E.groups[g].nick })), op);
+    if (args.slice(0, 4).join(' ') === 'ad group member add') {
+      req(op, 'group', 'member-id'); const g = grupo(op.group);
+      if (!esAdminDirectorio()) ERR('Insufficient privileges to complete the operation.');
+      const u = Object.keys(E.users).find(k => E.users[k].id === op['member-id']);
+      if (!u) ERR("Resource '" + op['member-id'] + "' does not exist or one of its queried reference-property objects are not present.");
+      if (E.groups[g].members.includes(op['member-id'])) ERR('One or more added object references already exist for the following modified properties: \'members\'.');
+      E.groups[g].members.push(op['member-id']); auditar('Add member to group', u); return '';
+    }
+    if (args.slice(0, 4).join(' ') === 'ad group member list') {
+      req(op, 'group'); const g = grupo(op.group);
+      return salida(E.groups[g].members.map(id => { const u = Object.keys(E.users).find(k => E.users[k].id === id); return { displayName: E.users[u].displayName, id, userPrincipalName: u }; }), op);
+    }
+    if (args.slice(0, 4).join(' ') === 'ad group member remove') {
+      req(op, 'group', 'member-id'); const g = grupo(op.group);
+      if (!esAdminDirectorio()) ERR('Insufficient privileges to complete the operation.');
+      E.groups[g].members = E.groups[g].members.filter(m => m !== op['member-id']); auditar('Remove member from group', op['member-id']); return '';
+    }
+
+    if (dos === 'group create') {
+      req(op, 'name', 'location');
+      if (!puede(SUBID, 'write')) negar(rgId(op.name), 'Microsoft.Resources/subscriptions/resourceGroups/write');
+      const n = op.name; if (!/^[-\w._()]+$/.test(n)) ERR("Parameter 'resource_group_name' must conform to the following pattern: '^[-\\w\\._\\(\\)]+$'.");
+      E.rgs[n] = { location: op.location }; actividad('Microsoft.Resources/subscriptions/resourceGroups/write', 'Succeeded', rgId(n));
+      return salida({ id: rgId(n), location: op.location, managedBy: null, name: n, properties: { provisioningState: 'Succeeded' }, tags: null, type: 'Microsoft.Resources/resourceGroups' }, op);
+    }
+    if (dos === 'group show') { req(op, 'name'); const n = exigirRg(op.name); if (!puede(rgId(n), 'read') && !puede(rgId(n), 'monitor')) negar(rgId(n), 'Microsoft.Resources/subscriptions/resourceGroups/read', false); return salida({ id: rgId(n), location: E.rgs[n].location, name: n, properties: { provisioningState: 'Succeeded' }, type: 'Microsoft.Resources/resourceGroups' }, op); }
+    if (dos === 'group list') return salida(Object.keys(E.rgs).filter(n => puede(rgId(n), 'read')).map(n => ({ id: rgId(n), location: E.rgs[n].location, name: n })), op);
+
+    if (dos === 'resource list') {
+      const rg = op['resource-group'] ? exigirRg(op['resource-group']) : null;
+      if (rg && !puede(rgId(rg), 'read')) negar(rgId(rg), 'Microsoft.Resources/subscriptions/resourceGroups/resources/read', false);
+      return salida(Object.keys(E.sa).filter(s => !rg || E.sa[s].rg === rg).map(s => ({ name: s, resourceGroup: E.sa[s].rg, location: E.sa[s].location, type: 'Microsoft.Storage/storageAccounts' })), op);
+    }
+
+    if (grupoCmd === 'storage account create') {
+      req(op, 'name', 'resource-group');
+      const rg = exigirRg(op['resource-group']); const n = op.name;
+      if (!/^[a-z0-9]{3,24}$/.test(n)) ERR("(AccountNameInvalid) " + n + " is not a valid storage account name. Storage account name must be between 3 and 24 characters in length and use numbers and lower-case letters only.\nCode: AccountNameInvalid");
+      if (!puede(rgId(rg), 'write')) negar(rgId(rg) + '/providers/Microsoft.Storage/storageAccounts/' + n, 'Microsoft.Storage/storageAccounts/write');
+      if (E.sa[n]) ERR('(StorageAccountAlreadyTaken) The storage account named ' + n + ' is already taken.\nCode: StorageAccountAlreadyTaken');
+      E.sa[n] = { rg, location: op.location || E.rgs[rg].location, sku: op.sku || 'Standard_RAGRS', httpsOnly: op['https-only'] !== undefined ? bool(op['https-only'], 'https-only') : true, tls: op['min-tls-version'] || 'TLS1_2', publico: op['allow-blob-public-access'] !== undefined ? bool(op['allow-blob-public-access'], 'allow-blob-public-access') : false, contenedores: {} };
+      actividad('Microsoft.Storage/storageAccounts/write', 'Succeeded', saId(n));
+      return salida(vistaSa(n), op);
+    }
+    if (grupoCmd === 'storage account show') {
+      req(op, 'name'); const s = exigirSa(op.name, op['resource-group']);
+      if (!puede(saId(op.name), 'read')) negar(saId(op.name), 'Microsoft.Storage/storageAccounts/read', false);
+      return salida(vistaSa(op.name), op);
+    }
+    if (grupoCmd === 'storage account update') {
+      req(op, 'name'); const s = exigirSa(op.name, op['resource-group']);
+      if (!puede(saId(op.name), 'write')) negar(saId(op.name), 'Microsoft.Storage/storageAccounts/write');
+      if (op['https-only'] !== undefined) s.httpsOnly = bool(op['https-only'], 'https-only');
+      if (op['min-tls-version'] !== undefined) { if (!['TLS1_0', 'TLS1_1', 'TLS1_2'].includes(op['min-tls-version'])) ERR("argument --min-tls-version: invalid choice: '" + op['min-tls-version'] + "' (choose from 'TLS1_0', 'TLS1_1', 'TLS1_2')"); s.tls = op['min-tls-version']; }
+      if (op['allow-blob-public-access'] !== undefined) s.publico = bool(op['allow-blob-public-access'], 'allow-blob-public-access');
+      actividad('Microsoft.Storage/storageAccounts/write', 'Succeeded', saId(op.name));
+      return salida(vistaSa(op.name), op);
+    }
+    if (grupoCmd === 'storage account list') return salida(Object.keys(E.sa).filter(n => puede(saId(n), 'read')).map(vistaSa), op);
+    if (grupoCmd === 'storage container create') {
+      req(op, 'name', 'account-name'); const s = exigirSa(op['account-name']);
+      autorizarDatos(op, s, 'write');
+      if (op['public-access'] && op['public-access'] !== 'off' && !s.publico) ERR('Public access is not permitted on this storage account.\nRequestId:' + uid() + '\nErrorCode:PublicAccessNotPermitted');
+      if (s.contenedores[op.name]) return salida({ created: false }, op);
+      s.contenedores[op.name] = { acceso: op['public-access'] || 'off', blobs: {} };
+      return salida({ created: true }, op);
+    }
+    if (grupoCmd === 'storage blob upload') {
+      req(op, 'account-name', 'container-name', 'file'); const s = exigirSa(op['account-name']);
+      autorizarDatos(op, s, 'write');
+      const c = s.contenedores[op['container-name']]; if (!c) ERR('The specified container does not exist.\nErrorCode:ContainerNotFound');
+      if (E.archivos[op.file] === undefined) ERR("[Errno 2] No such file or directory: '" + op.file + "'");
+      const nom = op.name || op.file;
+      if (c.blobs[nom] && op.overwrite !== true && op.overwrite !== 'true') ERR('The specified blob already exists.\nErrorCode:BlobAlreadyExists\nIf you want to overwrite the existing one, please add --overwrite in your command.');
+      c.blobs[nom] = { contenido: E.archivos[op.file], fecha: new Date(E.reloj).toISOString() };
+      return salida({ client_request_id: uid(), date: new Date(E.reloj).toISOString(), etag: '"0x8DCE' + Math.floor(Math.random() * 1e8).toString(16).toUpperCase() + '"', last_modified: new Date(E.reloj).toISOString(), request_server_encrypted: true, version: '2022-11-02' }, op);
+    }
+    if (grupoCmd === 'storage blob list') {
+      req(op, 'account-name', 'container-name'); const s = exigirSa(op['account-name']);
+      autorizarDatos(op, s, 'read');
+      const c = s.contenedores[op['container-name']]; if (!c) ERR('The specified container does not exist.\nErrorCode:ContainerNotFound');
+      return salida(Object.keys(c.blobs).map(b => ({ name: b, blobType: 'BlockBlob', blobTier: 'Hot', length: c.blobs[b].contenido.length, contentType: 'text/plain', lastModified: c.blobs[b].fecha })), op);
+    }
+
+    if (grupoCmd === 'role assignment create') {
+      req(op, 'role', 'scope');
+      const rol = Object.keys(ROLES).find(r => r.toLowerCase() === String(op.role).toLowerCase());
+      if (!rol) ERR("Role '" + op.role + "' doesn't exist.");
+      const scope = String(op.scope);
+      validarScope(scope);
+      if (!puede(scope, 'roles')) negar(scope, 'Microsoft.Authorization/roleAssignments/write');
+      let pid, pname, ptype;
+      if (op['assignee-object-id']) {
+        pid = op['assignee-object-id']; ptype = op['assignee-principal-type'] || 'User';
+        const g = Object.keys(E.groups).find(k => E.groups[k].id === pid); const u = Object.keys(E.users).find(k => E.users[k].id === pid);
+        if (!g && !u) ERR("Principal " + pid + " does not exist in the directory " + TENANT + ".");
+        pname = g || u; ptype = g ? 'Group' : 'User';
+      } else if (op.assignee) {
+        const u = E.users[op.assignee] ? op.assignee : null; const g = E.groups[op.assignee] ? op.assignee : null;
+        if (!u && !g) ERR("Cannot find user or service principal in graph database for '" + op.assignee + "'. If the assignee is an appId, make sure the corresponding service principal is created with 'az ad sp create --id " + op.assignee + "'.");
+        pid = u ? E.users[u].id : E.groups[g].id; pname = u || g; ptype = u ? 'User' : 'Group';
+      } else ERR('usage error: --assignee STRING | --assignee-object-id GUID');
+      if (E.roles.some(r => r.principalId === pid && r.role === rol && r.scope.toLowerCase() === scope.toLowerCase())) ERR('(RoleAssignmentExists) The role assignment already exists.\nCode: RoleAssignmentExists');
+      const r = { id: uid(), principalId: pid, principalName: pname, principalType: ptype, role: rol, scope };
+      E.roles.push(r); actividad('Microsoft.Authorization/roleAssignments/write', 'Succeeded', scope);
+      return salida(vistaRol(r), op);
+    }
+    if (grupoCmd === 'role assignment delete') {
+      const scope = op.scope ? String(op.scope) : null;
+      if (scope && !puede(scope, 'roles')) negar(scope, 'Microsoft.Authorization/roleAssignments/delete');
+      const pid = op.assignee ? (E.users[op.assignee] ? E.users[op.assignee].id : (E.groups[op.assignee] ? E.groups[op.assignee].id : 'x')) : null;
+      const antes = E.roles.length;
+      E.roles = E.roles.filter(r => !((!pid || r.principalId === pid) && (!op.role || r.role.toLowerCase() === String(op.role).toLowerCase()) && (!scope || r.scope.toLowerCase() === scope.toLowerCase())));
+      if (E.roles.length === antes) return 'No matched assignments were found to delete';
+      actividad('Microsoft.Authorization/roleAssignments/delete', 'Succeeded', scope || SUBID);
+      return '';
+    }
+    if (grupoCmd === 'role assignment list') {
+      let rs = E.roles.slice();
+      if (op['resource-group']) {
+        const rg = rgId(exigirRg(op['resource-group']));
+        rs = rs.filter(r => r.scope.toLowerCase().startsWith(rg.toLowerCase()) || (op['include-inherited'] && rg.toLowerCase().startsWith(r.scope.toLowerCase())));
+      } else if (op.scope) {
+        const sc = String(op.scope).toLowerCase(); rs = rs.filter(r => r.scope.toLowerCase() === sc || (op['include-inherited'] && sc.startsWith(r.scope.toLowerCase())));
+      } else if (!op.all) { rs = rs.filter(r => r.scope.toLowerCase() === SUBID.toLowerCase()); }
+      if (op.assignee) { const pid = E.users[op.assignee] ? E.users[op.assignee].id : (E.groups[op.assignee] ? E.groups[op.assignee].id : null); if (!pid) ERR("Cannot find user or service principal in graph database for '" + op.assignee + "'."); rs = rs.filter(r => r.principalId === pid); }
+      if (!puede(SUBID, 'read') && !rs.length) return op.o === 'table' ? '' : '[]';
+      return salida(rs.map(vistaRol), op);
+    }
+
+    if (dos === 'monitor activity-log' && args[2] === 'list') {
+      let scope = SUBID;
+      if (op['resource-group']) scope = rgId(exigirRg(op['resource-group']));
+      if (!puede(scope, 'monitor')) negar(scope, 'Microsoft.Insights/eventtypes/values/read', false);
+      let ev = E.actividad.slice().reverse();
+      if (op['resource-group']) ev = ev.filter(e => (e.resourceGroupName || '').toLowerCase() === op['resource-group'].toLowerCase());
+      if (op.status && op.status !== true) ev = ev.filter(e => e.status.value.toLowerCase() === String(op.status).toLowerCase());
+      if (op.caller && op.caller !== true) ev = ev.filter(e => e.caller.toLowerCase() === String(op.caller).toLowerCase());
+      if (op.offset && !/^\d+[dhm]$/.test(op.offset)) ERR("argument --offset: invalid timedelta value: '" + op.offset + "'");
+      return salida(ev, op);
+    }
+
+    if (args[0] === 'rest') return rest(op);
+
+    if (['ad', 'group', 'storage', 'role', 'monitor', 'account', 'resource'].includes(args[0])) { const malo = args.slice(1).find(a => !a.startsWith('-')) || ''; ERR("'" + malo + "' is misspelled or not recognized by the system.\nSee 'az " + args[0] + " --help'."); }
+    ERR("'" + args[0] + "' is misspelled or not recognized by the system.");
+  }
+  function autorizarDatos(op, s, tipo) {
+    const n = Object.keys(E.sa).find(k => E.sa[k] === s);
+    const modo = op['auth-mode'] || 'key';
+    if (modo === 'key') {
+      if (!puede(saId(n), 'write')) negar(saId(n), 'Microsoft.Storage/storageAccounts/listKeys/action');
+      actividad('Microsoft.Storage/storageAccounts/listKeys/action', 'Succeeded', saId(n));
+      return;
+    }
+    if (modo !== 'login') ERR("argument --auth-mode: invalid choice: '" + modo + "' (choose from 'key', 'login')");
+    if (!puede(saId(n), tipo === 'write' ? 'datos-write' : 'datos-read')) ERR('You do not have the required permissions needed to perform this operation.\nDepending on your operation, you may need to be assigned one of the following roles:\n    "Storage Blob Data Owner"\n    "Storage Blob Data Contributor"\n    "Storage Blob Data Reader"\n    "Storage Queue Data Contributor"\n    "Storage Queue Data Reader"\n    "Storage Table Data Contributor"\n    "Storage Table Data Reader"\n\nIf you want to use the old authentication method and allow querying for the right account key, please use the "--auth-mode" parameter and "key" value.\nThis request is not authorized to perform this operation using this permission.\nErrorCode:AuthorizationPermissionMismatch');
+  }
+  function validarScope(scope) {
+    if (!scope.toLowerCase().startsWith(SUBID.toLowerCase())) ERR("(InvalidSubscriptionId) The provided subscription identifier '" + (scope.split('/')[2] || '') + "' is malformed or invalid.\nCode: InvalidSubscriptionId");
+    const m = /resourceGroups\/([^/]+)/i.exec(scope); if (m) exigirRg(m[1]);
+    const n = /storageAccounts\/([^/]+)/i.exec(scope); if (n) exigirSa(n[1]);
+  }
+
+  function rest(op) {
+    req(op, 'url|uri'); const url = String(op.url || op.uri); const met = String(op.method || 'get').toLowerCase();
+    const graph = 'https://graph.microsoft.com/v1.0/';
+    if (!url.startsWith(graph)) ERR('Bad Request({"error":{"code":"BadRequest","message":"Invalid request URL. El simulador solo responde las consultas de Microsoft Graph que usa la actividad."}})');
+    const ruta = url.slice(graph.length).split('?')[0];
+    const soloAdmin = () => { if (!esAdminDirectorio()) ERR('Forbidden({"error":{"code":"Authorization_RequestDenied","message":"Insufficient privileges to complete the operation."}})'); };
+    if (ruta === 'users' && met === 'get') {
+      const sel = /\$select=([^&\s]+)/.exec(String(op['uri-parameters'] || '') + ' ' + url);
+      let v = Object.keys(E.users).map(u => ({ userPrincipalName: u, accountEnabled: E.users[u].enabled, displayName: E.users[u].displayName, id: E.users[u].id }));
+      if (sel) { const c = sel[1].split(','); v = v.map(x => { const o = {}; c.forEach(k => o[k] = x[k]); return o; }); }
+      return salida({ '@odata.context': graph + '$metadata#users', value: v }, op);
+    }
+    if (ruta === 'policies/identitySecurityDefaultsEnforcementPolicy') {
+      if (met === 'get') return salida({ '@odata.context': graph + '$metadata#policies/identitySecurityDefaultsEnforcementPolicy/$entity', id: '00000000-0000-0000-0000-000000000005', displayName: 'Security Defaults', description: 'Security defaults is a set of basic identity security mechanisms recommended by Microsoft.', isEnabled: E.secDefaults }, op);
+      if (met === 'patch') {
+        soloAdmin(); req(op, 'body'); let b; try { b = JSON.parse(op.body); } catch (e) { ERR("Failed to parse string as JSON:\n" + op.body + "\nError detail: " + e.message); }
+        if (typeof b.isEnabled !== 'boolean') ERR('Bad Request({"error":{"code":"BadRequest","message":"Invalid value specified for property \'isEnabled\'."}})');
+        E.secDefaults = b.isEnabled; auditar('Update policy', 'Security Defaults'); return '';
+      }
+    }
+    if (ruta === 'auditLogs/directoryAudits' && met === 'get') {
+      soloAdmin();
+      const v = E.auditoria.slice().reverse();
+      if ((op.o || op.output) === 'table' && op.query === undefined) return tabla(v.map(a => ({ activityDateTime: a.activityDateTime, activityDisplayName: a.activityDisplayName, initiatedBy: a.initiatedBy.user.userPrincipalName, target: a.targetResources[0].displayName, result: a.result })));
+      return salida({ '@odata.context': graph + '$metadata#auditLogs/directoryAudits', value: v }, op);
+    }
+    if (ruta === 'auditLogs/signIns' && met === 'get') {
+      soloAdmin();
+      const v = E.ingresos.slice().reverse();
+      if ((op.o || op.output) === 'table' && op.query === undefined) return tabla(v.map(s => ({ createdDateTime: s.createdDateTime, userPrincipalName: s.userPrincipalName, appDisplayName: s.appDisplayName, ipAddress: s.ipAddress, errorCode: s.status.errorCode, failureReason: s.status.failureReason || '' })));
+      return salida({ '@odata.context': graph + '$metadata#auditLogs/signIns', value: v }, op);
+    }
+    ERR('Not Found({"error":{"code":"Request_ResourceNotFound","message":"Resource not found for the segment \'' + ruta.split('/').pop() + '\'."}})');
+  }
+
+  /* ---------- Inicio de sesión ---------- */
+  let pendiente = null;
+  function login(op) {
+    if (op.username === undefined || op.username === true) return 'Para cambiar de sesión, indique la cuenta y su contraseña:\naz login -u <cuenta>@' + DOMINIO + " -p '<contraseña>'\nPara volver a la sesión del administrador: az logout";
+    const upn = op.username; const u = E.users[upn];
+    if (!u) { ingreso(upn, 50034, 'The user account does not exist in the directory.'); ERR("AADSTS50034: The user account {EmailHidden} does not exist in the '" + TENANT + "' directory. To sign into this application, the account must be added to the directory."); }
+    if (!u.enabled) { ingreso(upn, 50057, 'User account is disabled.'); ERR('AADSTS50057: The user account is disabled. The account has been disabled by an administrator.'); }
+    if (op.password === undefined || op.password === true) ERR('the following arguments are required: --password/-p');
+    if (upn === ADMIN) { ERR('La cuenta del administrador se recupera con az logout.'); }
+    if (String(op.password) !== u.password) { ingreso(upn, 50126, 'Error validating credentials due to invalid username or password.'); ERR('AADSTS50126: Error validating credentials due to invalid username or password.'); }
+    if (u.mustChange) { pendiente = { tipo: 'clave', upn }; return 'AADSTS50055: La contraseña de ' + upn + ' fue definida por un administrador y debe cambiarse en el primer ingreso.\nIngrese la nueva contraseña (al menos 12 caracteres, con mayúsculas, minúsculas, números y símbolos).'; }
+    return continuarIngreso(upn);
+  }
+  function continuarIngreso(upn) {
+    const u = E.users[upn];
+    if (E.secDefaults && !u.mfa) {
+      const clave = Array.from({ length: 16 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ234567'[Math.floor(Math.random() * 30)]).join('').replace(/(.{4})/g, '$1 ').trim();
+      const cod = String(100000 + Math.floor(Math.random() * 900000));
+      pendiente = { tipo: 'mfa', upn, cod };
+      return 'Los valores predeterminados de seguridad exigen registrar un segundo factor antes de continuar.\nMicrosoft Authenticator · cuenta ' + upn + '\nClave de configuración: ' + clave + '\n[Aplicación simulada] El código vigente que muestra Authenticator es: ' + cod.slice(0, 3) + ' ' + cod.slice(3) + '\nEscriba el código de seis dígitos para completar el registro.';
+    }
+    return abrirSesion(upn, u.mfa ? 'con segundo factor' : 'sin segundo factor');
+  }
+  function abrirSesion(upn, como) {
+    ingreso(upn, 0, null); E.sesion = upn;
+    const aviso = como === 'sin segundo factor' ? '\nAdvertencia: el ingreso se completó solo con contraseña. Los valores predeterminados de seguridad no están habilitados.' : '';
+    return JSON.stringify([{ cloudName: 'AzureCloud', id: SUB, isDefault: true, name: 'Azure for Students', state: 'Enabled', tenantId: TENANT, user: { name: upn, type: 'user' } }], null, 2) + '\nSesión iniciada como ' + upn + ' (' + como + '). Las variables de la sesión anterior no se conservan: defínalas de nuevo.' + aviso;
+  }
+  function responderPendiente(txt) {
+    const p = pendiente; pendiente = null;
+    if (p.tipo === 'clave') {
+      const ok = txt.length >= 12 && /[A-Z]/.test(txt) && /[a-z]/.test(txt) && /\d/.test(txt) && /[^A-Za-z0-9]/.test(txt);
+      if (!ok) { pendiente = p; return { out: 'La contraseña no cumple los requisitos de complejidad. Ingrese otra.', err: true, oculto: true }; }
+      if (txt === E.users[p.upn].password) { pendiente = p; return { out: 'La nueva contraseña debe ser distinta de la inicial. Ingrese otra.', err: true, oculto: true }; }
+      E.users[p.upn].password = txt; E.users[p.upn].mustChange = false; auditar('Change user password', p.upn, null, p.upn);
+      return { out: 'Contraseña actualizada.\n' + continuarIngreso(p.upn), oculto: true };
+    }
+    if (p.tipo === 'mfa') {
+      if (txt.replace(/\s/g, '') !== p.cod) { pendiente = p; return { out: 'Código incorrecto. Escriba el código de seis dígitos que muestra la aplicación.', err: true }; }
+      E.users[p.upn].mfa = true; auditar('User registered security info', p.upn, null, p.upn);
+      return { out: 'Segundo factor registrado: Microsoft Authenticator.\n' + abrirSesion(p.upn, 'con segundo factor') };
+    }
+  }
+
+  /* ---------- curl ---------- */
+  function curl(args) {
+    let w = null, url = null, silencio = false, aNulo = false;
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (a === '-s' || a === '--silent') silencio = true;
+      else if (a === '-o') { aNulo = args[i + 1] === '/dev/null'; i++; }
+      else if (a === '-w' || a === '--write-out') { w = args[i + 1]; i++; }
+      else if (a.startsWith('-')) continue;
+      else url = a;
+    }
+    if (!url) ERR('curl: no URL specified!\ncurl: try \'curl --help\' for more information');
+    const m = /^(https?):\/\/([a-z0-9]+)\.blob\.core\.windows\.net\/([^/]+)\/(.+)$/.exec(url);
+    let cod = 0, cuerpo = '';
+    if (!m) { cod = 0; if (!silencio) cuerpo = 'curl: (6) Could not resolve host: ' + url.replace(/^https?:\/\//, '').split('/')[0]; }
+    else {
+      const s = E.sa[m[2]];
+      if (!s) { cod = 0; if (!silencio) cuerpo = 'curl: (6) Could not resolve host: ' + m[2] + '.blob.core.windows.net'; }
+      else if (m[1] === 'http' && s.httpsOnly) { cod = 400; cuerpo = '<Error><Code>AccountRequiresHttps</Code><Message>The account being accessed does not support http.</Message></Error>'; }
+      else if (!s.publico) { cod = 409; cuerpo = '<Error><Code>PublicAccessNotPermitted</Code><Message>Public access is not permitted on this storage account.</Message></Error>'; }
+      else { const c = s.contenedores[m[3]]; const b = c && c.acceso !== 'off' ? c.blobs[m[4]] : null; if (b) { cod = 200; cuerpo = b.contenido; } else { cod = 404; cuerpo = '<Error><Code>ResourceNotFound</Code><Message>The specified resource does not exist.</Message></Error>'; } }
+    }
+    let r = aNulo ? '' : cuerpo;
+    if (w) r += w.replace('%{http_code}', String(cod).padStart(3, '0')).replace(/\\n/g, '\n');
+    return r;
+  }
+
+  /* ---------- Ejecución de una línea ---------- */
+  function ejecutarLinea(linea, interno) {
+    try {
+      const t = linea.trim();
+      if (!t || t.startsWith('#')) return { out: '' };
+      const asig = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(t);
+      if (asig && !/^\s/.test(asig[2])) {
+        const w = palabras(asig[2]);
+        if (w.some(x => typeof x === 'object')) ERR('bash: syntax error near unexpected token');
+        vars()[asig[1]] = w.join(' ');
+        return { out: '' };
+      }
+      const w = palabras(t);
+      const segmentos = [[]]; let redir = null;
+      for (let i = 0; i < w.length; i++) {
+        const x = w[i];
+        if (typeof x === 'object' && x.op === '|') segmentos.push([]);
+        else if (typeof x === 'object' && x.op === '>') { redir = w[i + 1]; if (typeof redir !== 'string') ERR("bash: syntax error near unexpected token `newline'"); i++; }
+        else segmentos[segmentos.length - 1].push(x);
+      }
+      let out = '';
+      segmentos.forEach((seg, k) => { out = comando(seg, k === 0 ? null : out); });
+      if (redir) { if (redir !== '/dev/null') E.archivos[redir] = out.endsWith('\n') || !out ? out : out + '\n'; return { out: '' }; }
+      return { out };
+    } catch (e) {
+      if (e instanceof Falla) return { out: '', err: e.message };
+      return { out: '', err: 'Error interno del simulador: ' + e.message };
+    }
+  }
+  function comando(seg, entrada) {
+    if (!seg.length) return '';
+    const [c, ...a] = seg;
+    switch (c) {
+      case 'az': return az(a);
+      case 'echo': return a.join(' ') + '\n';
+      case 'curl': return curl(a);
+      case 'cut': {
+        const d = (a.find(x => x.startsWith('-d')) || '-d\t').slice(2) || '\t'; const f = parseInt((a.find(x => x.startsWith('-f')) || '-f1').slice(2), 10);
+        return String(entrada || '').split('\n').filter(l => l !== '').map(l => l.split(d)[f - 1] ?? l).join('\n');
+      }
+      case 'cat': if (!a.length) return entrada || ''; return a.map(f => { if (E.archivos[f] === undefined) ERR('cat: ' + f + ': No such file or directory'); return E.archivos[f]; }).join('');
+      case 'ls': return Object.keys(E.archivos).join('  ');
+      case 'pwd': return '/home/' + E.sesion.split('@')[0];
+      case 'whoami': return E.sesion.split('@')[0];
+      case 'clear': return '\u0000CLEAR';
+      case 'history': return E.hist.map((h, i) => String(i + 1).padStart(5) + '  ' + h).join('\n');
+      case 'help': return AYUDA;
+      case 'unset': a.forEach(k => delete vars()[k]); return '';
+      case 'export': a.forEach(x => { const m = /^([A-Za-z_]\w*)=(.*)$/.exec(x); if (m) vars()[m[1]] = m[2]; }); return '';
+      case 'grep': { const p = a[a.length - 1]; return String(entrada || '').split('\n').filter(l => l.includes(p)).join('\n'); }
+      case 'sleep': return '';
+      default: ERR('bash: ' + c + ': command not found');
+    }
+  }
+  const AYUDA = 'Simulador de Azure Cloud Shell · comandos disponibles\n' +
+    '  az account show | az ad signed-in-user show\n' +
+    '  az ad user create | delete | list | show | update\n' +
+    '  az ad group create | show | list · az ad group member add | list | remove\n' +
+    '  az group create | show · az resource list\n' +
+    '  az storage account create | show | update · az storage container create\n' +
+    '  az storage blob upload | list\n' +
+    '  az role assignment create | delete | list\n' +
+    '  az monitor activity-log list\n' +
+    '  az rest (Microsoft Graph: users, valores predeterminados de seguridad, registros de Entra)\n' +
+    '  az login -u <cuenta> -p <contraseña> · az logout\n' +
+    '  curl · echo · cat · ls · cut · clear · history';
+
+  return {
+    estado: () => E,
+    sesion: () => E.sesion,
+    esperando: () => pendiente ? pendiente.tipo : null,
+    prompt: () => pendiente ? (pendiente.tipo === 'clave' ? 'Nueva contraseña: ' : 'Código: ') : E.sesion.split('@')[0] + ' [ ~ ]$ ',
+    ejecutar(linea) {
+      if (pendiente) return responderPendiente(linea.trim());
+      if (linea.trim()) E.hist.push(linea.replace(/\s+/g, ' ').trim());
+      E.reloj += 1500;
+      const r = ejecutarLinea(linea);
+      return r.err ? { out: (r.out ? r.out + '\n' : '') + 'ERROR: ' + r.err, err: true } : { out: r.out };
+    },
+  };
+}
+if (typeof module !== 'undefined') module.exports = { crearSimulador };
+</script>
+
+<script>
+/* ===================== Interfaz ===================== */
+(function () {
+  const CLAVE = 'gsi-ti3v62-simulador-azure-v1';
+  const sal = document.getElementById('salida'), ent = document.getElementById('entrada'), pr = document.getElementById('pr'), term = document.getElementById('term');
+  let guardado = null;
+  try { guardado = JSON.parse(localStorage.getItem(CLAVE) || 'null'); } catch (e) { guardado = null; }
+  let sim = crearSimulador(guardado ? guardado.estado : null);
+  let transcripcion = guardado ? guardado.transcripcion : [];
+  let acumulado = '', hIdx = null;
+
+  function guardar() { try { localStorage.setItem(CLAVE, JSON.stringify({ estado: sim.estado(), transcripcion })); } catch (e) { } }
+  function pintar(texto, clase) {
+    const d = document.createElement('div'); if (clase) d.className = clase; d.textContent = texto; sal.appendChild(d);
+  }
+  function reproducir() { sal.innerHTML = ''; transcripcion.forEach(l => pintar(l.t, l.c)); }
+  function anotar(t, c) { transcripcion.push({ t, c }); pintar(t, c); }
+  function anotarRes(t, err) { const c = err ? 'err' : 'res'; anotar(t, c); }
+  function actualizarPrompt() {
+    pr.textContent = acumulado ? '> ' : sim.prompt();
+    ent.type = sim.esperando() === 'clave' ? 'password' : 'text';
+    document.getElementById('sesion').textContent = 'Sesión: ' + (sim.sesion().startsWith('administrador@') ? 'administrador' : sim.sesion());
+    term.scrollTop = term.scrollHeight;
+  }
+  function bienvenida() {
+    anotar('Simulador de Azure Cloud Shell · Terminal de Buses Costa Azul', 'ok');
+    anotar('Suscripción: Azure for Students · directorio terminalcostaazul.onmicrosoft.com · sesión del administrador de la suscripción.', 'dim');
+    anotar('Comience por el Paso A0 de la guía, definiendo las variables de trabajo. Escriba help para ver los comandos disponibles.', 'dim');
+    anotar('', '');
+  }
+  function procesar(linea) {
+    const esperaba = sim.esperando();
+    if (esperaba) {
+      anotar(sim.prompt() + (esperaba === 'clave' ? '************' : linea), 'cmd');
+      const r = sim.ejecutar(linea);
+      if (r.out) anotarRes(r.out, r.err);
+      guardar(); actualizarPrompt(); return;
+    }
+    anotar((acumulado ? '> ' : sim.prompt()) + linea, 'cmd');
+    if (/\\\s*$/.test(linea)) { acumulado += linea.replace(/\\\s*$/, ' '); actualizarPrompt(); return; }
+    const completo = acumulado + linea; acumulado = '';
+    const r = sim.ejecutar(completo);
+    if (r.out === '\u0000CLEAR') { transcripcion.push({ t: '[pantalla limpiada]', c: 'dim' }); sal.innerHTML = ''; }
+    else if (r.out) anotarRes(r.out.replace(/\n$/, ''), r.err);
+    guardar(); actualizarPrompt();
+  }
+  ent.addEventListener('keydown', (e) => {
+    const h = sim.estado().hist;
+    if (e.key === 'Enter') { const v = ent.value; ent.value = ''; hIdx = null; procesar(v); }
+    else if (e.key === 'ArrowUp') { if (!h.length) return; hIdx = hIdx === null ? h.length - 1 : Math.max(0, hIdx - 1); ent.value = h[hIdx]; e.preventDefault(); }
+    else if (e.key === 'ArrowDown') { if (hIdx === null) return; hIdx++; if (hIdx >= h.length) { hIdx = null; ent.value = ''; } else ent.value = h[hIdx]; e.preventDefault(); }
+    else if (e.key === 'l' && e.ctrlKey) { e.preventDefault(); sal.innerHTML = ''; }
+  });
+  ent.addEventListener('paste', (e) => {
+    const t = (e.clipboardData || window.clipboardData).getData('text');
+    if (!t.includes('\n')) return;
+    e.preventDefault();
+    const lineas = (ent.value + t).replace(/\r/g, '').split('\n');
+    ent.value = lineas.pop();
+    lineas.forEach(procesar);
+  });
+  term.addEventListener('click', () => { if (!window.getSelection().toString()) ent.focus(); });
+  document.getElementById('bPanel').addEventListener('click', () => document.getElementById('panel').classList.toggle('oculto'));
+  const bR = document.getElementById('bReinicio'); let confirmar = false;
+  bR.addEventListener('click', () => {
+    if (!confirmar) { confirmar = true; bR.textContent = '¿Borrar todo? Confirme'; bR.style.borderColor = '#E30613'; setTimeout(() => { confirmar = false; bR.textContent = 'Reiniciar'; bR.style.borderColor = ''; }, 4000); return; }
+    try { localStorage.removeItem(CLAVE); } catch (e) { }
+    sim = crearSimulador(null); transcripcion = []; acumulado = ''; sal.innerHTML = ''; confirmar = false; bR.textContent = 'Reiniciar'; bR.style.borderColor = '';
+    bienvenida(); guardar(); actualizarPrompt(); ent.focus();
+  });
+  document.getElementById('bDescarga').addEventListener('click', () => {
+    const g = (sim.estado().vars[Object.keys(sim.estado().vars)[0]] || {}).G || 'grupo';
+    const f = new Date();
+    const cab = 'Transcripción · Simulador de Azure · Terminal de Buses Costa Azul\nTI3V62 · Gestión de Seguridad de la Información · Parte A\nGrupo: ' + g + ' · Descargada: ' + f.toLocaleString('es-CL') + '\n' + '='.repeat(72) + '\n\n';
+    const blob = new Blob([cab + transcripcion.map(l => l.t).join('\n') + '\n'], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'transcripcion-azure-' + g + '-' + f.toISOString().slice(0, 16).replace(/[:T]/g, '') + '.txt';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  if (transcripcion.length) reproducir(); else { bienvenida(); guardar(); }
+  actualizarPrompt(); ent.focus();
+})();
+</script>
+</body>
+</html>
