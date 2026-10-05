@@ -244,7 +244,7 @@ function crearSimulador(estadoInicial, ahora) {
   /* ---------- Argumentos de az ---------- */
   function opciones(args) {
     const op = {}; const pos = [];
-    const alias = { '-n': '--name', '-g': '--resource-group', '-c': '--container-name', '-o': '--output', '-u': '--username', '-p': '--password' };
+    const alias = { '-n': '--name', '-g': '--resource-group', '-c': '--container-name', '-o': '--output', '-u': '--username', '-p': '--password', '-l': '--location', '-y': '--yes' };
     for (let i = 0; i < args.length; i++) {
       let a = args[i];
       if (a.startsWith('-')) {
@@ -268,7 +268,7 @@ function crearSimulador(estadoInicial, ahora) {
   function principalesDe(upn) { const u = E.users[upn]; if (!u) return []; const ids = [u.id]; Object.values(E.groups).forEach(g => { if (g.members.includes(u.id)) ids.push(g.id); }); return ids; }
   function rolesEn(upn, scope) { const ids = principalesDe(upn); return E.roles.filter(r => ids.includes(r.principalId) && (scope === r.scope || scope.toLowerCase().startsWith(r.scope.toLowerCase() + '/'))).map(r => r.role); }
   function puede(scope, accion) {
-    const rs = rolesEn(E.sesion, scope).map(r => ROLES[r]);
+    const rs = rolesEn(E.sesion, scope).map(r => ROLES[r] || (E.rolesPropios && E.rolesPropios[r]) || { control: 'none', datos: false });
     if (accion === 'read') return rs.some(r => ['all', 'write', 'read', 'roles'].includes(r.control));
     if (accion === 'write') return rs.some(r => ['all', 'write'].includes(r.control));
     if (accion === 'roles') return rs.some(r => ['all', 'roles'].includes(r.control));
@@ -298,6 +298,24 @@ function crearSimulador(estadoInicial, ahora) {
   /* ---------- Recursos ---------- */
   const rgId = (n) => SUBID + '/resourceGroups/' + n;
   const saId = (s) => rgId(E.sa[s].rg) + '/providers/Microsoft.Storage/storageAccounts/' + s;
+  function rolDe(nombre) {
+    const k = Object.keys(ROLES).find(r => r.toLowerCase() === String(nombre).toLowerCase());
+    if (k) return k;
+    return Object.keys(E.rolesPropios || {}).find(r => r.toLowerCase() === String(nombre).toLowerCase());
+  }
+  function perfilRol(acc, dat) {
+    const a = acc.map(x => x.toLowerCase()), d = dat.map(x => x.toLowerCase());
+    let control = 'none';
+    if (a.includes('*')) control = 'all';
+    else if (a.some(x => x.startsWith('microsoft.authorization/'))) control = 'roles';
+    else if (a.some(x => x.endsWith('/write') || x.endsWith('/*') || x.endsWith('/action'))) control = 'write';
+    else if (a.some(x => x.startsWith('microsoft.insights/'))) control = 'monitor';
+    else if (a.some(x => x.endsWith('/read'))) control = 'read';
+    let datos = false;
+    if (d.some(x => x.includes('blobs/write') || x.includes('blobs/*') || x === '*')) datos = 'write';
+    else if (d.some(x => x.includes('blobs/read'))) datos = 'read';
+    return { control, datos };
+  }
   function rgReal(n) { const k = Object.keys(E.rgs).find(x => x.toLowerCase() === String(n).toLowerCase()); return k; }
   function exigirRg(n) { const k = rgReal(n); if (!k) ERR("(ResourceGroupNotFound) Resource group '" + n + "' could not be found.\nCode: ResourceGroupNotFound"); return k; }
   function exigirSa(n, rg) { const s = E.sa[n]; if (!s || (rg && rgReal(rg) !== s.rg)) ERR("(ResourceNotFound) The Resource 'Microsoft.Storage/storageAccounts/" + n + "' under resource group '" + (rg || '') + "' was not found.\nCode: ResourceNotFound"); return s; }
@@ -395,6 +413,36 @@ function crearSimulador(estadoInicial, ahora) {
       E.rgs[n] = { location: op.location }; actividad('Microsoft.Resources/subscriptions/resourceGroups/write', 'Succeeded', rgId(n));
       return salida({ id: rgId(n), location: op.location, managedBy: null, name: n, properties: { provisioningState: 'Succeeded' }, tags: null, type: 'Microsoft.Resources/resourceGroups' }, op);
     }
+    if (dos === 'group delete') {
+      req(op, 'name'); const n = exigirRg(op.name);
+      if (!puede(SUBID, 'write') && !puede(rgId(n), 'write')) negar(rgId(n), 'Microsoft.Resources/subscriptions/resourceGroups/delete');
+      if (op.yes === undefined) { pendiente = { tipo: 'confirmar', accion: () => borrarRg(n) }; return 'Are you sure you want to perform this operation? (y/n):'; }
+      return borrarRg(n);
+    }
+    if (grupoCmd === 'role definition create') {
+      req(op, 'role-definition');
+      if (!puede(SUBID, 'roles')) negar(SUBID, 'Microsoft.Authorization/roleDefinitions/write');
+      let txt = String(op['role-definition']);
+      if (txt.startsWith('@')) { const f = txt.slice(1); if (E.archivos[f] === undefined) ERR("[Errno 2] No such file or directory: '" + f + "'"); txt = E.archivos[f]; }
+      let d; try { d = JSON.parse(txt); } catch (e) { ERR('Failed to parse the role definition. Use a valid JSON file or string. ' + e.message); }
+      const nom = d.Name || d.name || d.roleName; const acc = d.Actions || d.actions || []; const dat = d.DataActions || d.dataActions || []; const sc = d.AssignableScopes || d.assignableScopes || [];
+      if (!nom) ERR("The role definition must contain the property 'Name'.");
+      if (!sc.length) ERR("The role definition must contain at least one value in 'AssignableScopes'.");
+      if (!acc.length && !dat.length) ERR("The role definition must contain at least one value in 'Actions' or 'DataActions'.");
+      if (rolDe(nom)) ERR('(RoleDefinitionWithSameNameExists) A custom role with the same name already exists in this directory.\nCode: RoleDefinitionWithSameNameExists');
+      sc.forEach(validarScope);
+      E.rolesPropios = E.rolesPropios || {};
+      E.rolesPropios[nom] = Object.assign(perfilRol(acc, dat), { descripcion: d.Description || d.description || '', acciones: acc, datos_acciones: dat, alcances: sc });
+      actividad('Microsoft.Authorization/roleDefinitions/write', 'Succeeded', SUBID);
+      return salida({ assignableScopes: sc, description: d.Description || d.description || '', id: SUBID + '/providers/Microsoft.Authorization/roleDefinitions/' + uid(), name: uid(), permissions: [{ actions: acc, dataActions: dat, notActions: d.NotActions || [], notDataActions: [] }], roleName: nom, roleType: 'CustomRole', type: 'Microsoft.Authorization/roleDefinitions' }, op);
+    }
+    if (grupoCmd === 'role definition list') {
+      const propios = Object.entries(E.rolesPropios || {}).map(([k, v]) => ({ roleName: k, roleType: 'CustomRole', description: v.descripcion }));
+      const base = Object.keys(ROLES).map(k => ({ roleName: k, roleType: 'BuiltInRole', description: '' }));
+      let v = op['custom-role-only'] === 'true' || op['custom-role-only'] === true ? propios : base.concat(propios);
+      if (op.name && op.name !== true) v = v.filter(r => r.roleName.toLowerCase() === String(op.name).toLowerCase());
+      return salida(v, op);
+    }
     if (dos === 'group show') { req(op, 'name'); const n = exigirRg(op.name); if (!puede(rgId(n), 'read') && !puede(rgId(n), 'monitor')) negar(rgId(n), 'Microsoft.Resources/subscriptions/resourceGroups/read', false); return salida({ id: rgId(n), location: E.rgs[n].location, name: n, properties: { provisioningState: 'Succeeded' }, type: 'Microsoft.Resources/resourceGroups' }, op); }
     if (dos === 'group list') return salida(Object.keys(E.rgs).filter(n => puede(rgId(n), 'read')).map(n => ({ id: rgId(n), location: E.rgs[n].location, name: n })), op);
 
@@ -456,7 +504,7 @@ function crearSimulador(estadoInicial, ahora) {
 
     if (grupoCmd === 'role assignment create') {
       req(op, 'role', 'scope');
-      const rol = Object.keys(ROLES).find(r => r.toLowerCase() === String(op.role).toLowerCase());
+      const rol = rolDe(op.role);
       if (!rol) ERR("Role '" + op.role + "' doesn't exist.");
       const scope = String(op.scope);
       validarScope(scope);
@@ -569,6 +617,14 @@ function crearSimulador(estadoInicial, ahora) {
     ERR('Not Found({"error":{"code":"Request_ResourceNotFound","message":"Resource not found for the segment \'' + ruta.split('/').pop() + '\'."}})');
   }
 
+  function borrarRg(n) {
+    const id = rgId(n);
+    Object.keys(E.sa).forEach(k => { if (E.sa[k].rg === n) delete E.sa[k]; });
+    E.roles = E.roles.filter(r => !r.scope.toLowerCase().startsWith(id.toLowerCase()));
+    delete E.rgs[n];
+    actividad('Microsoft.Resources/subscriptions/resourceGroups/delete', 'Succeeded', id);
+    return '';
+  }
   /* ---------- Inicio de sesión ---------- */
   let pendiente = null;
   function login(op) {
@@ -605,6 +661,10 @@ function crearSimulador(estadoInicial, ahora) {
       if (txt === E.users[p.upn].password) { pendiente = p; return { out: 'La nueva contraseña debe ser distinta de la inicial. Ingrese otra.', err: true, oculto: true }; }
       E.users[p.upn].password = txt; E.users[p.upn].mustChange = false; auditar('Change user password', p.upn, null, p.upn);
       return { out: 'Contraseña actualizada.\n' + continuarIngreso(p.upn), oculto: true };
+    }
+    if (p.tipo === 'confirmar') {
+      if (/^y(es)?$|^s(i|í)?$/i.test(txt)) return { out: p.accion() };
+      return { out: 'Operation cancelled.' };
     }
     if (p.tipo === 'mfa') {
       if (txt.replace(/\s/g, '') !== p.cod) { pendiente = p; return { out: 'Código incorrecto. Escriba el código de seis dígitos que muestra la aplicación.', err: true }; }
@@ -701,7 +761,8 @@ function crearSimulador(estadoInicial, ahora) {
     '  az group create | show · az resource list\n' +
     '  az storage account create | show | update · az storage container create\n' +
     '  az storage blob upload | list\n' +
-    '  az role assignment create | delete | list\n' +
+    '  az role assignment create | delete | list · az role definition create | list\n' +
+    '  az group delete\n' +
     '  az monitor activity-log list\n' +
     '  az rest (Microsoft Graph: users, valores predeterminados de seguridad, registros de Entra)\n' +
     '  az login -u <cuenta> -p <contraseña> · az logout\n' +
@@ -711,7 +772,7 @@ function crearSimulador(estadoInicial, ahora) {
     estado: () => E,
     sesion: () => E.sesion,
     esperando: () => pendiente ? pendiente.tipo : null,
-    prompt: () => pendiente ? (pendiente.tipo === 'clave' ? 'Nueva contraseña: ' : 'Código: ') : E.sesion.split('@')[0] + ' [ ~ ]$ ',
+    prompt: () => pendiente ? ({ clave: 'Nueva contraseña: ', mfa: 'Código: ', confirmar: '(y/n): ' })[pendiente.tipo] : E.sesion.split('@')[0] + ' [ ~ ]$ ',
     ejecutar(linea) {
       if (pendiente) return responderPendiente(linea.trim());
       if (linea.trim()) E.hist.push(linea.replace(/\s+/g, ' ').trim());
