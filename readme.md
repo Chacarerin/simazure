@@ -1,7 +1,8 @@
 # Simulador de Azure Cloud Shell · Terminal de Buses Costa Azul
 
 Simulador web de la consola de Azure, desarrollado como recurso de aprendizaje para la asignatura
-**Gestión de Seguridad de la Información (TI3V62)**, INACAP Valparaíso, segundo semestre de 2026.
+**Gestión de Seguridad de la Información** (TI3062 diurno y TI3V62 vespertino), INACAP Valparaíso,
+segundo semestre de 2026.
 
 ## Propósito
 
@@ -13,9 +14,10 @@ con privilegios de administración sobre un directorio de Microsoft Entra ID, co
 cuentas institucionales no cumplen por diseño.
 
 El simulador resuelve esa restricción: reproduce el comportamiento de Azure Cloud Shell sobre un
-entorno ficticio —el sistema de encomiendas del Terminal de Buses Costa Azul— y permite ejecutar el
-procedimiento completo de la guía de laboratorio sin cuenta, sin costo y sin conexión a servicios
-externos. La restricción encontrada no se oculta: forma parte del análisis que el estudiante
+entorno ficticio y permite ejecutar el procedimiento completo de las guías de laboratorio y del
+proyecto integrador sin cuenta, sin costo y sin conexión a servicios externos. Al comenzar se elige el
+caso de trabajo: el Terminal de Buses Costa Azul, que articula el laboratorio del vespertino y el
+proyecto final, o uno de los cuatro casos de la Unidad 1 del diurno. La restricción encontrada no se oculta: forma parte del análisis que el estudiante
 desarrolla, porque ilustra el principio de mínimo privilegio aplicado por una organización real.
 
 ## Alcance funcional
@@ -27,12 +29,16 @@ desarrolla, porque ilustra el principio de mínimo privilegio aplicado por una o
 | Identidades | Usuarios, grupos y membresías en Microsoft Entra ID; cambio de contraseña obligatorio en el primer ingreso |
 | Control de acceso | Asignación y retiro de roles de Azure RBAC con evaluación de alcance y herencia; las operaciones no autorizadas se rechazan con el mensaje que emite Azure |
 | Autenticación | Valores predeterminados de seguridad y registro de un segundo factor con una aplicación autenticadora simulada; rechazo de cuentas deshabilitadas |
-| Auditoría | Registro de actividad de Azure y registros de auditoría e inicio de sesión de Microsoft Entra, generados a partir de las acciones del propio estudiante |
-| Evidencia | Descarga de la transcripción completa de la sesión en texto plano |
+| Red | Reglas de red de la cuenta de almacenamiento: dirección pública autorizada y denegación por omisión |
+| Servicio de aplicación | Plan de App Service con redundancia de zona, aplicación con HTTPS obligatorio, versión mínima de TLS, FTP deshabilitado e identidad administrada |
+| Disponibilidad y respaldo | Replicación geográfica del almacenamiento, eliminación reversible y versiones, con restauración de un archivo eliminado |
+| Auditoría | Registro de actividad de Azure y registros de auditoría e inicio de sesión de Microsoft Entra, generados a partir de las acciones del propio estudiante. Los inicios de sesión se consultan en un portal de Entra simulado con descarga en CSV, porque su lectura por API exige la licencia P1, como en Azure |
+| Evidencia | Descarga de la transcripción completa en texto plano, con la hora de cada comando y las contraseñas ocultas |
 
-Los comandos se escriben tal como figuran en la guía de laboratorio: el simulador interpreta
-variables de entorno, sustitución de comandos, continuación de línea, tuberías y redirección, y
-admite los parámetros `--query` y `--output` de la interfaz de línea de comandos de Azure.
+Los comandos se escriben tal como figuran en las guías y en las diapositivas: el simulador interpreta
+variables de entorno, sustitución de comandos, continuación de línea —con barra invertida o con
+comillas abiertas—, tuberías y redirección, y admite los parámetros `--query` y `--output` de la
+interfaz de línea de comandos de Azure, incluidas proyecciones e índices de JMESPath.
 
 ## Arquitectura
 
@@ -51,10 +57,10 @@ servidor, base de datos ni transmisión de información: el simulador no recopil
 
 ## Uso
 
-Abra `index.html` en un navegador actualizado, o acceda a la versión publicada. Desarrolle los
-Pasos A0 a A3 de la guía de laboratorio en el orden indicado y descargue la transcripción al
-término de cada paso. El panel de instrucciones indica cómo ejecutar en la consola las acciones
-que la guía describe en el portal de Azure.
+Abra `index.html` en un navegador actualizado, o acceda a la versión publicada. Elija el caso en la
+barra superior, desarrolle los pasos de la guía en el orden indicado y descargue la transcripción al
+término de cada sesión. El panel de instrucciones indica cómo ejecutar en la consola las acciones que
+las guías describen en el portal de Azure.
 
 ## Limitaciones
 

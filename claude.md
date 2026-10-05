@@ -1,8 +1,8 @@
 # Proyecto: simazure · Simulador de Azure Cloud Shell
 
-**Objetivo:** simulador web de la consola de Azure para la Parte A de la actividad de laboratorio de
-las unidades 2 y 3 de Gestión de Seguridad de la Información (TI3V62, vespertino, INACAP
-Valparaíso). Se despliega en Vercel como sitio estático.
+**Objetivo:** simulador web de la consola de Azure para Gestión de Seguridad de la Información, INACAP
+Valparaíso: la parte de nube del laboratorio de las unidades 2 y 3 (vespertino TI3V62 y diurno TI3062)
+y la implementación del proyecto integrador de la Unidad 4. Se despliega en Vercel como sitio estático.
 
 ## Por qué existe
 
@@ -30,8 +30,12 @@ ejecuten tal como están escritos.
 
 ## Reglas del simulador
 
-1. **La guía manda.** Todo comando que figure en la Parte A de la guía debe producir la salida que
-   la guía indica. Ante una diferencia, se corrige el simulador, nunca la guía.
+1. **La guía manda.** Todo comando que figure en las guías, en los enunciados o en las diapositivas
+   (sets 5 a 7 y de evaluación) debe producir la salida que el material indica. Ante una diferencia, se
+   corrige el simulador; la guía del vespertino ya se entregó y no se modifica.
+1.b **Fiel a Azure, también en sus límites.** Lo que Azure no permite con Entra ID Free, el simulador
+   tampoco: la lectura de inicios de sesión por API responde el error de licencia, y se consultan en el
+   portal de Entra simulado. Un plan básico rechaza la redundancia de zona.
 2. **Un solo archivo, sin dependencias.** `index.html` funciona sin conexión, abierto con doble
    clic. No se agregan bibliotecas externas, fuentes remotas ni procesos de compilación.
 3. **Sin base de datos ni servidor.** El estado vive en `localStorage` de cada navegador. No se
@@ -50,9 +54,16 @@ python3 -c "import re;s=open('index.html').read();open('/tmp/motor.js','w').writ
 node -e "const {crearSimulador}=require('/tmp/motor.js'); const s=crearSimulador(); console.log(s.ejecutar('az account show -o table').out)"
 ```
 
-Antes de publicar un cambio, recorrer la Parte A completa de la guía (A0 a A3) y verificar los
-cinco resultados de la Medida 4: dos accesos permitidos, dos denegados y el rechazo de la cuenta
-compartida.
+Antes de publicar un cambio, recorrer la Parte A completa de la guía del vespertino (A0 a A3) y
+verificar los cinco resultados de la Medida 4: dos accesos permitidos, dos denegados y el rechazo de
+la cuenta compartida. Correr además los comandos de la guía del diurno con un caso A a D y la secuencia
+del Paso 4 de los enunciados de la Unidad 4 con el caso Costa Azul.
+
+## Despliegue continuo
+
+⚠️ El proyecto de Vercel debe estar **conectado al repositorio** para que cada push publique. Si se
+desplegó subiendo archivos, el push no se refleja y hay que conectar el repositorio o volver a
+desplegar a mano.
 
 ## Despliegue
 

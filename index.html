@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Simulador de Azure · Costa Azul</title>
+<title>Simulador de Azure Cloud Shell</title>
 <link rel="icon" href="data:,">
 <style>
 :root {
@@ -17,6 +17,7 @@ header { background: #FFFFFF; border-bottom: 3px solid var(--rojo); padding: 10p
 header .tit { font-weight: 700; font-size: 15px; }
 header .sub { font-size: 12px; color: var(--gris); }
 header .esp { flex: 1; }
+select { font: inherit; font-size: 13px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--borde); background: #FFFFFF; max-width: 260px; }
 button { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--borde); background: #FFFFFF; cursor: pointer; }
 button.prim { background: var(--rojo); color: #FFFFFF; border-color: var(--rojo); font-weight: 600; }
 button:hover { filter: brightness(0.96); }
@@ -41,17 +42,39 @@ main { flex: 1; display: flex; min-height: 0; }
 #panel td { border-top: 1px solid var(--borde); padding: 5px 4px; vertical-align: top; }
 #panel td:first-child { width: 34%; font-weight: 600; }
 .nota { font-size: 11.5px; color: var(--gris); }
+#portal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+#portal.oculto { display: none; }
+#portal .caja { background: #FFFFFF; border-radius: 10px; width: min(1100px, 100%); max-height: 88vh; display: flex; flex-direction: column; padding: 14px 16px; }
+#portal .cab, #portal .pest { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+#portal .esp { flex: 1; }
+#portal .pest button.on { background: #1D1D1F; color: #FFFFFF; border-color: #1D1D1F; }
+#pCuerpo { overflow: auto; border: 1px solid var(--borde); border-radius: 6px; }
+#pCuerpo table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+#pCuerpo th, #pCuerpo td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borde); white-space: nowrap; }
+#pCuerpo th { background: #F3F3F5; position: sticky; top: 0; }
+#pCuerpo .vacio { padding: 18px; color: var(--gris); }
+#pCuerpo .bloq { padding: 22px; }
+#pCuerpo .bloq strong { color: var(--rojo); }
 @media (max-width: 760px) { main { flex-direction: column; } #panel { width: auto; max-width: none; max-height: 45vh; border-left: 0; border-top: 1px solid var(--borde); } }
 </style>
 </head>
 <body>
 <header>
   <div>
-    <div class="tit">Simulador de Azure · Terminal de Buses Costa Azul</div>
-    <div class="sub">TI3V62 · Gestión de Seguridad de la Información · Parte A de la actividad de laboratorio</div>
+    <div class="tit" id="titulo">Simulador de Azure Cloud Shell</div>
+    <div class="sub">Gestión de Seguridad de la Información · INACAP Valparaíso</div>
   </div>
   <span class="esp"></span>
+  <label class="sub" for="selCaso">Caso</label>
+  <select id="selCaso" aria-label="Caso de trabajo">
+    <option value="costaazul">Terminal de Buses Costa Azul (vespertino)</option>
+    <option value="a">Caso A · Centro Médico Bahía Norte</option>
+    <option value="b">Caso B · Transportes Valle Azul</option>
+    <option value="c">Caso C · Caja Vecina Los Andes</option>
+    <option value="d">Caso D · Puerto Frío Logística</option>
+  </select>
   <span id="sesion">Sesión: administrador</span>
+  <button id="bPortal">Portal de Entra</button>
   <button id="bPanel">Instrucciones</button>
   <button id="bReinicio">Reiniciar</button>
   <button id="bDescarga" class="prim">Descargar transcripción</button>
@@ -60,7 +83,7 @@ main { flex: 1; display: flex; min-height: 0; }
   <div id="term" tabindex="0"><div id="salida"></div><div id="linea"><span id="pr" class="pr"></span><input id="entrada" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Línea de comandos"></div></div>
   <aside id="panel">
     <h2>Instrucciones</h2>
-    <p>Esta consola reproduce Azure Cloud Shell. Desarrolle la Parte A (Pasos A0 a A3) escribiendo <strong>los comandos de la guía de laboratorio, tal como están escritos</strong>. La consola responde como lo haría Azure y conserva lo que usted crea, asigna o modifica.</p>
+    <p>Esta consola reproduce Azure Cloud Shell. Elija primero su <strong>caso</strong> en la barra superior y desarrolle la parte de nube de la guía de laboratorio escribiendo <strong>los comandos de la guía y de las diapositivas, tal como están escritos</strong>. Los valores entre &lt; &gt; se reemplazan por los datos de su caso. La consola responde como lo haría Azure y conserva lo que usted crea, asigna o modifica.</p>
     <p>Un comando mal escrito produce un error, igual que en Azure: corríjalo y vuelva a ejecutarlo. Los errores corregidos forman parte de la evidencia.</p>
 
     <h3>Antes de comenzar</h3>
@@ -72,7 +95,7 @@ main { flex: 1; display: flex; min-height: 0; }
       <tr><td>Medida 3 · primer ingreso de rmorales y pcortes</td><td><code>az login -u rmorales@$DOM -p '&lt;clave inicial&gt;'</code><br>La consola solicita la nueva contraseña y el registro del segundo factor.</td></tr>
       <tr><td>Medida 4 · cambiar de sesión</td><td><code>az login -u ...</code> abre la sesión de otra persona. <code>az logout</code> vuelve a la sesión del administrador. Cada sesión tiene sus propias variables.</td></tr>
       <tr><td>Medida 4 · la cuenta compartida</td><td><code>az login -u encomiendas@$DOM -p '&lt;clave&gt;'</code></td></tr>
-      <tr><td>Paso A3 · registros de Microsoft Entra</td><td><code>az rest --method get --url https://graph.microsoft.com/v1.0/auditLogs/directoryAudits -o table</code><br>y con <code>auditLogs/signIns</code> para los inicios de sesión.</td></tr>
+      <tr><td>Registros de Microsoft Entra</td><td>Botón <strong>Portal de Entra</strong>: registros de inicio de sesión y de auditoría, con descarga en CSV, como en el portal. Por consola, sin licencia P1, solo la auditoría responde: <code>az rest --method get --url https://graph.microsoft.com/v1.0/auditLogs/directoryAudits -o table</code></td></tr>
     </table>
 
     <h3>La evidencia</h3>
@@ -82,12 +105,29 @@ main { flex: 1; display: flex; min-height: 0; }
   </aside>
 </main>
 
+<div id="portal" class="oculto" role="dialog" aria-label="Portal de Entra">
+  <div class="caja">
+    <div class="cab"><strong>Microsoft Entra · Supervisión y estado</strong><span class="esp"></span><button id="pCerrar">Cerrar</button></div>
+    <div class="pest"><button data-t="ingresos" class="on">Registros de inicio de sesión</button><button data-t="auditoria">Registros de auditoría</button><span class="esp"></span><button id="pCsv" class="prim">Descargar CSV</button></div>
+    <div id="pCuerpo"></div>
+    <p class="nota">Reproduce la vista del centro de administración de Microsoft Entra. Los registros se generan con lo que se hace en la consola. Sin licencia P1, Azure los conserva siete días.</p>
+  </div>
+</div>
 <script id="motor">
 /* ===================== Motor del simulador ===================== */
-function crearSimulador(estadoInicial, ahora) {
+const CASOS = {
+  costaazul: { org: 'Terminal de Buses Costa Azul', dominio: 'terminalcostaazul.onmicrosoft.com', rotulo: 'Terminal de Buses Costa Azul · vespertino TI3V62' },
+  a: { org: 'Centro Médico Bahía Norte', dominio: 'bahianorte.onmicrosoft.com', rotulo: 'Caso A · Centro Médico Bahía Norte · diurno TI3062' },
+  b: { org: 'Transportes Valle Azul', dominio: 'transportesvalleazul.onmicrosoft.com', rotulo: 'Caso B · Transportes Valle Azul · diurno TI3062' },
+  c: { org: 'Caja Vecina Los Andes', dominio: 'cajavecinalosandes.onmicrosoft.com', rotulo: 'Caso C · Caja Vecina Los Andes · diurno TI3062' },
+  d: { org: 'Puerto Frío Logística', dominio: 'puertofriologistica.onmicrosoft.com', rotulo: 'Caso D · Puerto Frío Logística · diurno TI3062' },
+};
+function crearSimulador(estadoInicial, ahora, casoInicial) {
   const SUB = '3f2a6c1e-8b4d-4c7a-9e21-5d0b7f3a9c44';
   const TENANT = '9c1e2b7d-5a40-4e8f-b3c6-71d24f0a4a7d';
-  const DOMINIO = 'terminalcostaazul.onmicrosoft.com';
+  const CASO = (estadoInicial && estadoInicial.caso) || (CASOS[casoInicial] ? casoInicial : 'costaazul');
+  const DOMINIO = CASOS[CASO].dominio;
+  const IP_SHELL = '190.82.114.52';
   const ADMIN = 'administrador@' + DOMINIO;
   const SUBID = '/subscriptions/' + SUB;
   const ROLES = {
@@ -99,6 +139,16 @@ function crearSimulador(estadoInicial, ahora) {
     'Storage Blob Data Owner': { control: 'none', datos: 'write' },
     'Storage Blob Data Contributor': { control: 'none', datos: 'write' },
     'Storage Blob Data Reader': { control: 'none', datos: 'read' },
+  };
+  const PERMISOS = {
+    'Owner': { a: ['*'], n: [], d: [] },
+    'Contributor': { a: ['*'], n: ['Microsoft.Authorization/*/Delete', 'Microsoft.Authorization/*/Write', 'Microsoft.Authorization/elevateAccess/Action'], d: [] },
+    'Reader': { a: ['*/read'], n: [], d: [] },
+    'User Access Administrator': { a: ['*/read', 'Microsoft.Authorization/*', 'Microsoft.Support/*'], n: [], d: [] },
+    'Monitoring Reader': { a: ['*/read', 'Microsoft.Support/*'], n: [], d: [] },
+    'Storage Blob Data Owner': { a: ['Microsoft.Storage/storageAccounts/blobServices/containers/*', 'Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey/action'], n: [], d: ['Microsoft.Storage/storageAccounts/blobServices/containers/blobs/*'] },
+    'Storage Blob Data Contributor': { a: ['Microsoft.Storage/storageAccounts/blobServices/containers/delete', 'Microsoft.Storage/storageAccounts/blobServices/containers/read', 'Microsoft.Storage/storageAccounts/blobServices/containers/write', 'Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey/action'], n: [], d: ['Microsoft.Storage/storageAccounts/blobServices/containers/blobs/delete', 'Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read', 'Microsoft.Storage/storageAccounts/blobServices/containers/blobs/write', 'Microsoft.Storage/storageAccounts/blobServices/containers/blobs/move/action', 'Microsoft.Storage/storageAccounts/blobServices/containers/blobs/add/action'] },
+    'Storage Blob Data Reader': { a: ['Microsoft.Storage/storageAccounts/blobServices/containers/read', 'Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey/action'], n: [], d: ['Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read'] },
   };
 
   let E = estadoInicial || {
@@ -116,7 +166,12 @@ function crearSimulador(estadoInicial, ahora) {
     sesion: ADMIN,
     vars: {},
     hist: [],
+    caso: CASO,
+    planes: {},
+    apps: {},
+    sps: {},
   };
+  E.planes = E.planes || {}; E.apps = E.apps || {}; E.sps = E.sps || {};
   if (!estadoInicial) {
     E.users[ADMIN] = { id: uid(), displayName: 'Administrador de la suscripción', enabled: true, mustChange: false, mfa: true, password: null };
     E.roles.push({ id: uid(), principalId: E.users[ADMIN].id, principalName: ADMIN, principalType: 'User', role: 'Owner', scope: SUBID });
@@ -145,6 +200,7 @@ function crearSimulador(estadoInicial, ahora) {
         if (i >= s.length || s[i] === ',' || s[i] === ']' || s[i] === '}') break;
         if (s.startsWith('[]', i)) { pasos.push({ t: 'proy' }); i += 2; continue; }
         if (s[i] === '.') { i++; continue; }
+        const idx = /^\[(-?\d+)\]/.exec(s.slice(i)); if (idx) { pasos.push({ t: 'indice', n: parseInt(idx[1], 10) }); i += idx[0].length; continue; }
         if (s[i] === '[') { i++; const l = []; for (;;) { l.push(cadena()); ws(); if (s[i] === ',') { i++; continue; } if (s[i] === ']') { i++; break; } throw new Falla("argument --query: invalid jmespath_type value: '" + q + "'"); } pasos.push({ t: 'lista', l }); continue; }
         if (s[i] === '{') { i++; const h = []; for (;;) { const k = ident(); ws(); if (s[i] !== ':') throw new Falla("argument --query: invalid jmespath_type value: '" + q + "'"); i++; h.push([k, cadena()]); ws(); if (s[i] === ',') { i++; continue; } if (s[i] === '}') { i++; break; } throw new Falla("argument --query: invalid jmespath_type value: '" + q + "'"); } pasos.push({ t: 'hash', h }); continue; }
         pasos.push({ t: 'campo', k: ident() });
@@ -156,6 +212,7 @@ function crearSimulador(estadoInicial, ahora) {
         const x = pasos[p];
         if (v === null || v === undefined) return null;
         if (x.t === 'proy') { if (!Array.isArray(v)) return null; const resto = pasos.slice(p + 1); return v.map(e => evaluar(resto, e)).filter(e => e !== null && e !== undefined); }
+        if (x.t === 'indice') { if (!Array.isArray(v)) return null; v = v[x.n < 0 ? v.length + x.n : x.n]; continue; }
         if (x.t === 'campo') { v = (typeof v === 'object' && !Array.isArray(v)) ? v[x.k] : null; continue; }
         if (x.t === 'lista') { const b = v; v = x.l.map(c => { const r = evaluar(c, b); return r === undefined ? null : r; }); continue; }
         if (x.t === 'hash') { const b = v; const o = {}; x.h.forEach(([k, c]) => { const r = evaluar(c, b); o[k] = r === undefined ? null : r; }); v = o; continue; }
@@ -208,6 +265,7 @@ function crearSimulador(estadoInicial, ahora) {
       const c = linea[i];
       if (/\s/.test(c)) { push(); i++; continue; }
       if (c === '|' || c === '>') { push(); out.push({ op: c }); i++; continue; }
+      if (c === '<') { const m = /^<\s*([^\s>|]*)/.exec(linea.slice(i)); ERR('bash: ' + (m && m[1] ? m[1] : 'syntax error near unexpected token `newline\'') + (m && m[1] ? ': No such file or directory' : '') + '\nReemplace el valor entre < > por el dato de su caso.'); }
       if (c === "'") { const j = linea.indexOf("'", i + 1); if (j < 0) ERR('bash: unexpected EOF while looking for matching `\'\''); cur = (cur || '') + linea.slice(i + 1, j); i = j + 1; continue; }
       if (c === '"') {
         let j = i + 1, t = '';
@@ -329,7 +387,12 @@ function crearSimulador(estadoInicial, ahora) {
   function grupo(g) { const k = Object.keys(E.groups).find(x => x === g || E.groups[x].id === g); if (!k) ERR('No group matches the name of \'' + g + '\''); return k; }
   function vistaSa(n) {
     const s = E.sa[n];
-    return { id: saId(n), name: n, location: s.location, kind: 'StorageV2', resourceGroup: s.rg, sku: { name: s.sku, tier: 'Standard' }, enableHttpsTrafficOnly: s.httpsOnly, minimumTlsVersion: s.tls, allowBlobPublicAccess: s.publico, encryption: { keySource: 'Microsoft.Storage', services: { blob: { enabled: true, keyType: 'Account' }, file: { enabled: true, keyType: 'Account' } } }, primaryEndpoints: { blob: 'https://' + n + '.blob.core.windows.net/' }, provisioningState: 'Succeeded', type: 'Microsoft.Storage/storageAccounts' };
+    return { id: saId(n), name: n, location: s.location, kind: 'StorageV2', resourceGroup: s.rg, sku: { name: s.sku, tier: 'Standard' }, enableHttpsTrafficOnly: s.httpsOnly, minimumTlsVersion: s.tls, allowBlobPublicAccess: s.publico, networkRuleSet: { defaultAction: s.defaultAction || 'Allow', ipRules: (s.ipRules || []).map(ip => ({ action: 'Allow', ipAddressOrRange: ip })), bypass: 'AzureServices' }, encryption: { keySource: 'Microsoft.Storage', services: { blob: { enabled: true, keyType: 'Account' }, file: { enabled: true, keyType: 'Account' } } }, primaryEndpoints: { blob: 'https://' + n + '.blob.core.windows.net/' }, provisioningState: 'Succeeded', type: 'Microsoft.Storage/storageAccounts' };
+  }
+  function vistaApp(n) { const a = E.apps[n]; return { id: rgId(a.rg) + '/providers/Microsoft.Web/sites/' + n, name: n, resourceGroup: a.rg, state: a.estado, defaultHostName: n + '.azurewebsites.net', httpsOnly: a.httpsOnly, serverFarmId: rgId(a.rg) + '/providers/Microsoft.Web/serverfarms/' + a.plan, identity: a.identidad ? { principalId: a.identidad, type: 'SystemAssigned' } : null, siteConfig: { minTlsVersion: a.tls, ftpsState: a.ftps, linuxFxVersion: a.runtime.replace(':', '|') }, kind: 'app,linux' }; }
+  function permitePropio(scope, accion) {
+    const ids = principalesDe(E.sesion); const ac = accion.toLowerCase();
+    return E.roles.some(r => ids.includes(r.principalId) && (scope.toLowerCase() === r.scope.toLowerCase() || scope.toLowerCase().startsWith(r.scope.toLowerCase() + '/')) && E.rolesPropios && E.rolesPropios[r.role] && E.rolesPropios[r.role].acciones.some(x => { const p = x.toLowerCase(); return p === ac || p === '*' || (p.endsWith('*') && ac.startsWith(p.slice(0, -1))); }));
   }
   function vistaRol(r) { return { id: SUBID + '/providers/Microsoft.Authorization/roleAssignments/' + r.id, name: r.id, principalId: r.principalId, principalName: r.principalName, principalType: r.principalType, roleDefinitionName: r.role, scope: r.scope, type: 'Microsoft.Authorization/roleAssignments' }; }
 
@@ -386,6 +449,11 @@ function crearSimulador(estadoInicial, ahora) {
       auditar('Add group', n);
       return salida({ displayName: n, id: E.groups[n].id, mailNickname: op['mail-nickname'], securityEnabled: true }, op);
     }
+    if (grupoCmd === 'ad group delete') {
+      req(op, 'group'); const g = grupo(op.group);
+      if (!esAdminDirectorio()) ERR('Insufficient privileges to complete the operation.');
+      delete E.groups[g]; auditar('Delete group', g); return '';
+    }
     if (grupoCmd === 'ad group show') { req(op, 'group'); const g = grupo(op.group); return salida({ displayName: g, id: E.groups[g].id, mailNickname: E.groups[g].nick, securityEnabled: true }, op); }
     if (grupoCmd === 'ad group list') return salida(Object.keys(E.groups).map(g => ({ displayName: g, id: E.groups[g].id, mailNickname: E.groups[g].nick })), op);
     if (args.slice(0, 4).join(' ') === 'ad group member add') {
@@ -437,8 +505,8 @@ function crearSimulador(estadoInicial, ahora) {
       return salida({ assignableScopes: sc, description: d.Description || d.description || '', id: SUBID + '/providers/Microsoft.Authorization/roleDefinitions/' + uid(), name: uid(), permissions: [{ actions: acc, dataActions: dat, notActions: d.NotActions || [], notDataActions: [] }], roleName: nom, roleType: 'CustomRole', type: 'Microsoft.Authorization/roleDefinitions' }, op);
     }
     if (grupoCmd === 'role definition list') {
-      const propios = Object.entries(E.rolesPropios || {}).map(([k, v]) => ({ roleName: k, roleType: 'CustomRole', description: v.descripcion }));
-      const base = Object.keys(ROLES).map(k => ({ roleName: k, roleType: 'BuiltInRole', description: '' }));
+      const propios = Object.entries(E.rolesPropios || {}).map(([k, v]) => ({ roleName: k, roleType: 'CustomRole', description: v.descripcion, permissions: [{ actions: v.acciones, notActions: [], dataActions: v.datos_acciones, notDataActions: [] }], assignableScopes: v.alcances }));
+      const base = Object.keys(ROLES).map(k => ({ roleName: k, roleType: 'BuiltInRole', description: '', permissions: [{ actions: PERMISOS[k].a, notActions: PERMISOS[k].n, dataActions: PERMISOS[k].d, notDataActions: [] }], assignableScopes: ['/'] }));
       let v = op['custom-role-only'] === 'true' || op['custom-role-only'] === true ? propios : base.concat(propios);
       if (op.name && op.name !== true) v = v.filter(r => r.roleName.toLowerCase() === String(op.name).toLowerCase());
       return salida(v, op);
@@ -449,7 +517,10 @@ function crearSimulador(estadoInicial, ahora) {
     if (dos === 'resource list') {
       const rg = op['resource-group'] ? exigirRg(op['resource-group']) : null;
       if (rg && !puede(rgId(rg), 'read')) negar(rgId(rg), 'Microsoft.Resources/subscriptions/resourceGroups/resources/read', false);
-      return salida(Object.keys(E.sa).filter(s => !rg || E.sa[s].rg === rg).map(s => ({ name: s, resourceGroup: E.sa[s].rg, location: E.sa[s].location, type: 'Microsoft.Storage/storageAccounts' })), op);
+      const lista = Object.keys(E.sa).filter(s => !rg || E.sa[s].rg === rg).map(s => ({ name: s, resourceGroup: E.sa[s].rg, location: E.sa[s].location, type: 'Microsoft.Storage/storageAccounts' }))
+        .concat(Object.keys(E.planes).filter(k => !rg || E.planes[k].rg === rg).map(k => ({ name: k, resourceGroup: E.planes[k].rg, location: E.planes[k].location, type: 'Microsoft.Web/serverFarms' })))
+        .concat(Object.keys(E.apps).filter(k => !rg || E.apps[k].rg === rg).map(k => ({ name: k, resourceGroup: E.apps[k].rg, location: E.rgs[E.apps[k].rg].location, type: 'Microsoft.Web/sites' })));
+      return salida(lista, op);
     }
 
     if (grupoCmd === 'storage account create') {
@@ -473,8 +544,109 @@ function crearSimulador(estadoInicial, ahora) {
       if (op['https-only'] !== undefined) s.httpsOnly = bool(op['https-only'], 'https-only');
       if (op['min-tls-version'] !== undefined) { if (!['TLS1_0', 'TLS1_1', 'TLS1_2'].includes(op['min-tls-version'])) ERR("argument --min-tls-version: invalid choice: '" + op['min-tls-version'] + "' (choose from 'TLS1_0', 'TLS1_1', 'TLS1_2')"); s.tls = op['min-tls-version']; }
       if (op['allow-blob-public-access'] !== undefined) s.publico = bool(op['allow-blob-public-access'], 'allow-blob-public-access');
+      if (op['default-action'] !== undefined) { if (!['Allow', 'Deny'].includes(op['default-action'])) ERR("argument --default-action: invalid choice: '" + op['default-action'] + "' (choose from 'Allow', 'Deny')"); s.defaultAction = op['default-action']; }
+      if (op.sku !== undefined) { const v = ['Standard_LRS', 'Standard_ZRS', 'Standard_GRS', 'Standard_RAGRS', 'Standard_GZRS', 'Standard_RAGZRS']; if (!v.includes(op.sku)) ERR("argument --sku: invalid choice: '" + op.sku + "' (choose from " + v.map(x => "'" + x + "'").join(', ') + ')'); s.sku = op.sku; }
       actividad('Microsoft.Storage/storageAccounts/write', 'Succeeded', saId(op.name));
       return salida(vistaSa(op.name), op);
+    }
+    if (args.slice(0, 4).join(' ') === 'storage account network-rule add' || args.slice(0, 4).join(' ') === 'storage account network-rule remove' || args.slice(0, 4).join(' ') === 'storage account network-rule list') {
+      req(op, 'account-name'); const s = exigirSa(op['account-name'], op['resource-group']); const n = op['account-name'];
+      s.ipRules = s.ipRules || [];
+      if (args[3] === 'list') { if (!puede(saId(n), 'read')) negar(saId(n), 'Microsoft.Storage/storageAccounts/read', false); return salida(op.o === 'table' ? s.ipRules.map(ip => ({ action: 'Allow', iPAddressOrRange: ip })) : { ipRules: s.ipRules.map(ip => ({ action: 'Allow', ipAddressOrRange: ip })), virtualNetworkRules: [] }, op); }
+      req(op, 'ip-address');
+      if (!puede(saId(n), 'write')) negar(saId(n), 'Microsoft.Storage/storageAccounts/write');
+      const ip = String(op['ip-address']);
+      if (!/^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(ip)) ERR("(NetworkAclsValidationFailure) Validation of network acls failure: Invalid IP address or range '" + ip + "'.\nCode: NetworkAclsValidationFailure");
+      if (args[3] === 'add') { if (!s.ipRules.includes(ip)) s.ipRules.push(ip); } else s.ipRules = s.ipRules.filter(x => x !== ip);
+      actividad('Microsoft.Storage/storageAccounts/write', 'Succeeded', saId(n));
+      return salida(s.ipRules.map(x => ({ action: 'Allow', ipAddressOrRange: x })), op);
+    }
+    if (args.slice(0, 4).join(' ') === 'storage account blob-service-properties update' || args.slice(0, 4).join(' ') === 'storage account blob-service-properties show') {
+      req(op, 'account-name'); const s = exigirSa(op['account-name'], op['resource-group']); const n = op['account-name'];
+      s.servicio = s.servicio || { borrado: false, dias: 7, versiones: false, contBorrado: false, contDias: 7 };
+      if (args[3] === 'update') {
+        if (!puede(saId(n), 'write')) negar(saId(n), 'Microsoft.Storage/storageAccounts/blobServices/write');
+        if (op['enable-delete-retention'] !== undefined) s.servicio.borrado = bool(op['enable-delete-retention'], 'enable-delete-retention');
+        if (op['delete-retention-days'] !== undefined) { const d = parseInt(op['delete-retention-days'], 10); if (!(d >= 1 && d <= 365)) ERR('argument --delete-retention-days: must be between 1 and 365'); s.servicio.dias = d; }
+        if (op['enable-versioning'] !== undefined) s.servicio.versiones = bool(op['enable-versioning'], 'enable-versioning');
+        if (op['enable-container-delete-retention'] !== undefined) s.servicio.contBorrado = bool(op['enable-container-delete-retention'], 'enable-container-delete-retention');
+        if (op['container-delete-retention-days'] !== undefined) s.servicio.contDias = parseInt(op['container-delete-retention-days'], 10);
+        actividad('Microsoft.Storage/storageAccounts/blobServices/write', 'Succeeded', saId(n));
+      } else if (!puede(saId(n), 'read')) negar(saId(n), 'Microsoft.Storage/storageAccounts/blobServices/read', false);
+      return salida({ deleteRetentionPolicy: { enabled: s.servicio.borrado, days: s.servicio.borrado ? s.servicio.dias : null }, isVersioningEnabled: s.servicio.versiones, containerDeleteRetentionPolicy: { enabled: s.servicio.contBorrado, days: s.servicio.contBorrado ? s.servicio.contDias : null }, name: 'default', type: 'Microsoft.Storage/storageAccounts/blobServices' }, op);
+    }
+    if (grupoCmd === 'storage blob delete' || grupoCmd === 'storage blob undelete' || grupoCmd === 'storage blob download') {
+      req(op, 'account-name', 'container-name', 'name'); const s = exigirSa(op['account-name']);
+      autorizarDatos(op, s, args[2] === 'download' ? 'read' : 'write');
+      const c = s.contenedores[op['container-name']]; if (!c) ERR('The specified container does not exist.\nErrorCode:ContainerNotFound');
+      const b = c.blobs[op.name]; const serv = s.servicio || {};
+      if (args[2] === 'delete') {
+        if (!b || b.borrado) ERR('The specified blob does not exist.\nErrorCode:BlobNotFound');
+        if (serv.borrado) { b.borrado = new Date(E.reloj).toISOString(); } else delete c.blobs[op.name];
+        return '';
+      }
+      if (args[2] === 'undelete') {
+        if (!b || !b.borrado) ERR('The specified blob does not exist.\nErrorCode:BlobNotFound');
+        delete b.borrado; return '';
+      }
+      if (!b || b.borrado) ERR('The specified blob does not exist.\nErrorCode:BlobNotFound');
+      if (op.file && op.file !== true) { E.archivos[op.file] = b.contenido; }
+      return salida({ name: op.name, properties: { contentLength: b.contenido.length, contentSettings: { contentType: 'text/plain' }, lastModified: b.fecha } }, op);
+    }
+    if (dos === 'appservice plan' && ['create', 'show', 'list'].includes(args[2])) {
+      if (args[2] === 'list') return salida(Object.keys(E.planes).map(k => ({ name: k, resourceGroup: E.planes[k].rg, location: E.planes[k].location, sku: E.planes[k].sku, zoneRedundant: E.planes[k].zr, numberOfWorkers: E.planes[k].workers })), op);
+      req(op, 'name', 'resource-group'); const rg = exigirRg(op['resource-group']); const n = op.name; const id = rgId(rg) + '/providers/Microsoft.Web/serverfarms/' + n;
+      if (args[2] === 'show') { const pl = E.planes[n]; if (!pl) ERR("(ResourceNotFound) The Resource 'Microsoft.Web/serverFarms/" + n + "' under resource group '" + rg + "' was not found."); return salida({ id, name: n, location: pl.location, sku: { name: pl.sku, capacity: pl.workers }, zoneRedundant: pl.zr, kind: 'linux' }, op); }
+      if (!puede(rgId(rg), 'write')) negar(id, 'Microsoft.Web/serverfarms/write');
+      const sku = String(op.sku || 'B1').toUpperCase(); const validos = ['F1', 'B1', 'B2', 'B3', 'S1', 'S2', 'S3', 'P0V3', 'P1V2', 'P2V2', 'P3V2', 'P1V3', 'P2V3', 'P3V3'];
+      if (!validos.includes(sku)) ERR("argument --sku: invalid choice: '" + op.sku + "'");
+      const zr = op['zone-redundant'] === true || op['zone-redundant'] === 'true';
+      const workers = parseInt(op['number-of-workers'] || (zr ? 3 : 1), 10);
+      if (zr && !/^P\dV[23]$/.test(sku)) ERR('Zone redundancy cannot be enabled for SKU ' + sku + '. Zone redundant App Service plans require a Premium V2 or Premium V3 SKU (P1V2, P1V3 or higher).');
+      if (zr && workers < 2) ERR('A zone redundant App Service plan requires at least 2 instances.');
+      E.planes[n] = { rg, location: op.location || E.rgs[rg].location, sku, zr, workers };
+      actividad('Microsoft.Web/serverfarms/write', 'Succeeded', id);
+      return salida({ id, name: n, location: E.planes[n].location, sku: { name: sku, capacity: workers }, zoneRedundant: zr, kind: 'linux', provisioningState: 'Succeeded' }, op);
+    }
+    if (args[0] === 'webapp' || args[0] === 'appservice') { if (op.plan === undefined && op.password !== undefined) { op.plan = op.password; delete op.password; } }
+    if (args[0] === 'webapp') {
+      const sub = args[1] === 'config' || args[1] === 'identity' ? args[1] + ' ' + args[2] : args[1];
+      if (sub === 'list') return salida(Object.keys(E.apps).filter(k => !op['resource-group'] || E.apps[k].rg === op['resource-group']).map(vistaApp), op);
+      req(op, 'name', 'resource-group'); const rg = exigirRg(op['resource-group']); const n = op.name;
+      const id = rgId(rg) + '/providers/Microsoft.Web/sites/' + n;
+      if (sub === 'create') {
+        req(op, 'plan');
+        if (!E.planes[op.plan]) ERR("The plan '" + op.plan + "' doesn't exist in the resource group '" + rg + "'.");
+        if (!/^[a-z0-9-]{2,60}$/.test(n)) ERR('Webapp name "' + n + '" is invalid. Use only lowercase letters, numbers and hyphens.');
+        if (!puede(rgId(rg), 'write')) negar(id, 'Microsoft.Web/sites/write');
+        if (E.apps[n]) ERR("Webapp '" + n + "' already exists. The name is taken.");
+        E.apps[n] = { rg, plan: op.plan, runtime: op.runtime || 'NODE:20-lts', httpsOnly: false, tls: '1.2', ftps: 'AllAllowed', identidad: null, estado: 'Running' };
+        actividad('Microsoft.Web/sites/write', 'Succeeded', id);
+        return salida(vistaApp(n), op);
+      }
+      const a = E.apps[n]; if (!a || a.rg !== rg) ERR("(ResourceNotFound) The Resource 'Microsoft.Web/sites/" + n + "' under resource group '" + rg + "' was not found.\nCode: ResourceNotFound");
+      if (sub === 'show') { if (!puede(id, 'read')) negar(id, 'Microsoft.Web/sites/read', false); return salida(vistaApp(n), op); }
+      if (sub === 'config show') { if (!puede(id, 'read')) negar(id, 'Microsoft.Web/sites/config/read', false); return salida({ minTlsVersion: a.tls, ftpsState: a.ftps, http20Enabled: true, linuxFxVersion: a.runtime.replace(':', '|') }, op); }
+      if (sub === 'update') { if (!puede(id, 'write')) negar(id, 'Microsoft.Web/sites/write'); if (op['https-only'] !== undefined) a.httpsOnly = bool(op['https-only'], 'https-only'); actividad('Microsoft.Web/sites/write', 'Succeeded', id); return salida(vistaApp(n), op); }
+      if (sub === 'config set') {
+        if (!puede(id, 'write')) negar(id, 'Microsoft.Web/sites/config/write');
+        if (op['min-tls-version'] !== undefined) { if (!['1.0', '1.1', '1.2', '1.3'].includes(String(op['min-tls-version']))) ERR("argument --min-tls-version: invalid choice: '" + op['min-tls-version'] + "' (choose from '1.0', '1.1', '1.2', '1.3')"); a.tls = String(op['min-tls-version']); }
+        if (op['ftps-state'] !== undefined) { if (!['AllAllowed', 'FtpsOnly', 'Disabled'].includes(op['ftps-state'])) ERR("argument --ftps-state: invalid choice: '" + op['ftps-state'] + "' (choose from 'AllAllowed', 'Disabled', 'FtpsOnly')"); a.ftps = op['ftps-state']; }
+        actividad('Microsoft.Web/sites/config/write', 'Succeeded', id);
+        return salida({ minTlsVersion: a.tls, ftpsState: a.ftps }, op);
+      }
+      if (sub === 'identity assign') {
+        if (!puede(id, 'write')) negar(id, 'Microsoft.Web/sites/write');
+        if (!a.identidad) { a.identidad = uid(); E.sps[a.identidad] = n; }
+        actividad('Microsoft.Web/sites/write', 'Succeeded', id);
+        return salida({ principalId: a.identidad, tenantId: TENANT, type: 'SystemAssigned' }, op);
+      }
+      if (['restart', 'stop', 'start'].includes(sub)) {
+        const accion = 'Microsoft.Web/sites/' + sub + '/action';
+        if (!puede(id, 'write') && !permitePropio(id, accion)) negar(id, accion);
+        a.estado = sub === 'stop' ? 'Stopped' : 'Running';
+        actividad(accion, 'Succeeded', id); return '';
+      }
     }
     if (grupoCmd === 'storage account list') return salida(Object.keys(E.sa).filter(n => puede(saId(n), 'read')).map(vistaSa), op);
     if (grupoCmd === 'storage container create') {
@@ -499,7 +671,8 @@ function crearSimulador(estadoInicial, ahora) {
       req(op, 'account-name', 'container-name'); const s = exigirSa(op['account-name']);
       autorizarDatos(op, s, 'read');
       const c = s.contenedores[op['container-name']]; if (!c) ERR('The specified container does not exist.\nErrorCode:ContainerNotFound');
-      return salida(Object.keys(c.blobs).map(b => ({ name: b, blobType: 'BlockBlob', blobTier: 'Hot', length: c.blobs[b].contenido.length, contentType: 'text/plain', lastModified: c.blobs[b].fecha })), op);
+      const conBorrados = op.include && String(op.include).includes('d');
+      return salida(Object.keys(c.blobs).filter(b => conBorrados || !c.blobs[b].borrado).map(b => Object.assign({ name: b, blobType: 'BlockBlob', blobTier: 'Hot', length: c.blobs[b].contenido.length, contentType: 'text/plain', lastModified: c.blobs[b].fecha }, conBorrados ? { deleted: !!c.blobs[b].borrado } : {})), op);
     }
 
     if (grupoCmd === 'role assignment create') {
@@ -512,9 +685,9 @@ function crearSimulador(estadoInicial, ahora) {
       let pid, pname, ptype;
       if (op['assignee-object-id']) {
         pid = op['assignee-object-id']; ptype = op['assignee-principal-type'] || 'User';
-        const g = Object.keys(E.groups).find(k => E.groups[k].id === pid); const u = Object.keys(E.users).find(k => E.users[k].id === pid);
-        if (!g && !u) ERR("Principal " + pid + " does not exist in the directory " + TENANT + ".");
-        pname = g || u; ptype = g ? 'Group' : 'User';
+        const g = Object.keys(E.groups).find(k => E.groups[k].id === pid); const u = Object.keys(E.users).find(k => E.users[k].id === pid); const sp = E.sps[pid];
+        if (!g && !u && !sp) ERR("Principal " + pid + " does not exist in the directory " + TENANT + ".");
+        pname = g || u || sp; ptype = g ? 'Group' : (u ? 'User' : 'ServicePrincipal');
       } else if (op.assignee) {
         const u = E.users[op.assignee] ? op.assignee : null; const g = E.groups[op.assignee] ? op.assignee : null;
         if (!u && !g) ERR("Cannot find user or service principal in graph database for '" + op.assignee + "'. If the assignee is an appId, make sure the corresponding service principal is created with 'az ad sp create --id " + op.assignee + "'.");
@@ -562,11 +735,16 @@ function crearSimulador(estadoInicial, ahora) {
 
     if (args[0] === 'rest') return rest(op);
 
-    if (['ad', 'group', 'storage', 'role', 'monitor', 'account', 'resource'].includes(args[0])) { const malo = args.slice(1).find(a => !a.startsWith('-')) || ''; ERR("'" + malo + "' is misspelled or not recognized by the system.\nSee 'az " + args[0] + " --help'."); }
+    if (['ad', 'group', 'storage', 'role', 'monitor', 'account', 'resource', 'webapp', 'appservice'].includes(args[0])) { const malo = args.slice(1).find(a => !a.startsWith('-')) || ''; ERR("'" + malo + "' is misspelled or not recognized by the system.\nSee 'az " + args[0] + " --help'."); }
     ERR("'" + args[0] + "' is misspelled or not recognized by the system.");
+  }
+  function red(s) {
+    if ((s.defaultAction || 'Allow') === 'Deny' && !(s.ipRules || []).some(ip => ip === IP_SHELL || (ip.includes('/') && IP_SHELL.startsWith(ip.split('.').slice(0, 3).join('.') + '.'))))
+      ERR('This request is not authorized to perform this operation.\nRequestId:' + uid() + '\nErrorCode:AuthorizationFailure');
   }
   function autorizarDatos(op, s, tipo) {
     const n = Object.keys(E.sa).find(k => E.sa[k] === s);
+    red(s);
     const modo = op['auth-mode'] || 'key';
     if (modo === 'key') {
       if (!puede(saId(n), 'write')) negar(saId(n), 'Microsoft.Storage/storageAccounts/listKeys/action');
@@ -610,6 +788,7 @@ function crearSimulador(estadoInicial, ahora) {
     }
     if (ruta === 'auditLogs/signIns' && met === 'get') {
       soloAdmin();
+      ERR('Forbidden({"error":{"code":"Authentication_RequestFromNonPremiumTenantOrB2CTenant","message":"Neither tenant is B2C or tenant doesn\'t have premium license","innerError":{"date":"' + new Date(E.reloj).toISOString().slice(0, 19) + '","request-id":"' + uid() + '"}}})\nLos inicios de sesión se revisan y se descargan en el portal de Entra: use el botón «Portal de Entra».');
       const v = E.ingresos.slice().reverse();
       if ((op.o || op.output) === 'table' && op.query === undefined) return tabla(v.map(s => ({ createdDateTime: s.createdDateTime, userPrincipalName: s.userPrincipalName, appDisplayName: s.appDisplayName, ipAddress: s.ipAddress, errorCode: s.status.errorCode, failureReason: s.status.failureReason || '' })));
       return salida({ '@odata.context': graph + '$metadata#auditLogs/signIns', value: v }, op);
@@ -685,6 +864,18 @@ function crearSimulador(estadoInicial, ahora) {
       else url = a;
     }
     if (!url) ERR('curl: no URL specified!\ncurl: try \'curl --help\' for more information');
+    if (/^(https?:\/\/)?(ifconfig\.me|api\.ipify\.org|ipinfo\.io\/ip)\/?$/.test(url)) return IP_SHELL;
+    const app = /^(https?):\/\/([a-z0-9-]+)\.azurewebsites\.net(\/.*)?$/.exec(url);
+    if (app) {
+      const a = E.apps[app[2]]; let c2 = 0, b2 = '';
+      if (!a) { if (!silencio) b2 = 'curl: (6) Could not resolve host: ' + app[2] + '.azurewebsites.net'; }
+      else if (a.estado !== 'Running') { c2 = 403; b2 = 'Error 403 - This web app is stopped.'; }
+      else if (app[1] === 'http' && a.httpsOnly) { c2 = 301; b2 = ''; }
+      else { c2 = 200; b2 = '<html><body><h1>Sistema de encomiendas · ' + CASOS[E.caso].org + '</h1><p>Servicio en operación.</p></body></html>'; }
+      let r2 = aNulo ? '' : b2;
+      if (w) r2 += w.replace('%{http_code}', String(c2).padStart(3, '0')).replace(/\\n/g, '\n');
+      return r2;
+    }
     const m = /^(https?):\/\/([a-z0-9]+)\.blob\.core\.windows\.net\/([^/]+)\/(.+)$/.exec(url);
     let cod = 0, cuerpo = '';
     if (!m) { cod = 0; if (!silencio) cuerpo = 'curl: (6) Could not resolve host: ' + url.replace(/^https?:\/\//, '').split('/')[0]; }
@@ -692,8 +883,9 @@ function crearSimulador(estadoInicial, ahora) {
       const s = E.sa[m[2]];
       if (!s) { cod = 0; if (!silencio) cuerpo = 'curl: (6) Could not resolve host: ' + m[2] + '.blob.core.windows.net'; }
       else if (m[1] === 'http' && s.httpsOnly) { cod = 400; cuerpo = '<Error><Code>AccountRequiresHttps</Code><Message>The account being accessed does not support http.</Message></Error>'; }
+      else if ((s.defaultAction || 'Allow') === 'Deny' && !(s.ipRules || []).includes(IP_SHELL)) { cod = 403; cuerpo = '<Error><Code>AuthorizationFailure</Code><Message>This request is not authorized to perform this operation.</Message></Error>'; }
       else if (!s.publico) { cod = 409; cuerpo = '<Error><Code>PublicAccessNotPermitted</Code><Message>Public access is not permitted on this storage account.</Message></Error>'; }
-      else { const c = s.contenedores[m[3]]; const b = c && c.acceso !== 'off' ? c.blobs[m[4]] : null; if (b) { cod = 200; cuerpo = b.contenido; } else { cod = 404; cuerpo = '<Error><Code>ResourceNotFound</Code><Message>The specified resource does not exist.</Message></Error>'; } }
+      else { const c = s.contenedores[m[3]]; const b = c && c.acceso !== 'off' ? c.blobs[m[4]] : null; if (b && !b.borrado) { cod = 200; cuerpo = b.contenido; } else { cod = 404; cuerpo = '<Error><Code>ResourceNotFound</Code><Message>The specified resource does not exist.</Message></Error>'; } }
     }
     let r = aNulo ? '' : cuerpo;
     if (w) r += w.replace('%{http_code}', String(cod).padStart(3, '0')).replace(/\\n/g, '\n');
@@ -762,7 +954,11 @@ function crearSimulador(estadoInicial, ahora) {
     '  az storage account create | show | update · az storage container create\n' +
     '  az storage blob upload | list\n' +
     '  az role assignment create | delete | list · az role definition create | list\n' +
-    '  az group delete\n' +
+    '  az group delete · az ad group delete\n' +
+    '  az storage account network-rule add | list | remove · az storage account blob-service-properties update | show\n' +
+    '  az storage blob delete | undelete | download\n' +
+    '  az appservice plan create | show | list · az webapp create | show | list | update | restart\n' +
+    '  az webapp config set | show · az webapp identity assign\n' +
     '  az monitor activity-log list\n' +
     '  az rest (Microsoft Graph: users, valores predeterminados de seguridad, registros de Entra)\n' +
     '  az login -u <cuenta> -p <contraseña> · az logout\n' +
@@ -770,6 +966,15 @@ function crearSimulador(estadoInicial, ahora) {
 
   return {
     estado: () => E,
+    caso: () => E.caso,
+    portal() {
+      const admin = E.sesion === ADMIN;
+      return {
+        acceso: admin,
+        ingresos: E.ingresos.slice().reverse().map(x => ({ fecha: x.createdDateTime, usuario: x.userPrincipalName, aplicacion: x.appDisplayName, ip: x.ipAddress, estado: x.status.errorCode === 0 ? 'Correcto' : 'Error', codigo: x.status.errorCode, motivo: x.status.failureReason || '' })),
+        auditoria: E.auditoria.slice().reverse().map(x => ({ fecha: x.activityDateTime, actividad: x.activityDisplayName, categoria: x.category, iniciadaPor: x.initiatedBy.user.userPrincipalName, objetivo: x.targetResources[0].displayName, resultado: x.result })),
+      };
+    },
     sesion: () => E.sesion,
     esperando: () => pendiente ? pendiente.tipo : null,
     prompt: () => pendiente ? ({ clave: 'Nueva contraseña: ', mfa: 'Código: ', confirmar: '(y/n): ' })[pendiente.tipo] : E.sesion.split('@')[0] + ' [ ~ ]$ ',
@@ -782,7 +987,7 @@ function crearSimulador(estadoInicial, ahora) {
     },
   };
 }
-if (typeof module !== 'undefined') module.exports = { crearSimulador };
+if (typeof module !== 'undefined') module.exports = { crearSimulador, CASOS };
 </script>
 
 <script>
@@ -792,7 +997,9 @@ if (typeof module !== 'undefined') module.exports = { crearSimulador };
   const sal = document.getElementById('salida'), ent = document.getElementById('entrada'), pr = document.getElementById('pr'), term = document.getElementById('term');
   let guardado = null;
   try { guardado = JSON.parse(localStorage.getItem(CLAVE) || 'null'); } catch (e) { guardado = null; }
-  let sim = crearSimulador(guardado ? guardado.estado : null);
+  const sel = document.getElementById('selCaso');
+  let sim = crearSimulador(guardado ? guardado.estado : null, null, sel.value);
+  sel.value = sim.caso();
   let transcripcion = guardado ? guardado.transcripcion : [];
   let acumulado = '', hIdx = null;
 
@@ -801,19 +1008,37 @@ if (typeof module !== 'undefined') module.exports = { crearSimulador };
     const d = document.createElement('div'); if (clase) d.className = clase; d.textContent = texto; sal.appendChild(d);
   }
   function reproducir() { sal.innerHTML = ''; transcripcion.forEach(l => pintar(l.t, l.c)); }
-  function anotar(t, c) { transcripcion.push({ t, c }); pintar(t, c); }
+  function ocultarClaves(t) { if (!/\baz\s+(login|ad\s+user\s+create)\b/.test(t) && !/^\s*>?\s*--password/.test(t.replace(/^.*?\$\s/, ''))) return t; return t.replace(/(\s(?:-p|--password))(\s+)('[^']*'|"[^"]*"|\S+)/g, "$1$2'********'"); }
+  function anotar(t, c) {
+    if (c === 'cmd') t = ocultarClaves(t);
+    const h = new Date().toLocaleTimeString('es-CL', { hour12: false });
+    transcripcion.push({ t, c, h }); pintar(t, c);
+  }
   function anotarRes(t, err) { const c = err ? 'err' : 'res'; anotar(t, c); }
   function actualizarPrompt() {
     pr.textContent = acumulado ? '> ' : sim.prompt();
     ent.type = sim.esperando() === 'clave' ? 'password' : 'text';
     document.getElementById('sesion').textContent = 'Sesión: ' + (sim.sesion().startsWith('administrador@') ? 'administrador' : sim.sesion());
+    document.getElementById('titulo').textContent = 'Simulador de Azure Cloud Shell · ' + CASOS[sim.caso()].org;
     term.scrollTop = term.scrollHeight;
   }
   function bienvenida() {
-    anotar('Simulador de Azure Cloud Shell · Terminal de Buses Costa Azul', 'ok');
-    anotar('Suscripción: Azure for Students · directorio terminalcostaazul.onmicrosoft.com · sesión del administrador de la suscripción.', 'dim');
-    anotar('Comience por el Paso A0 de la guía, definiendo las variables de trabajo. Escriba help para ver los comandos disponibles.', 'dim');
+    const c = CASOS[sim.caso()];
+    anotar('Simulador de Azure Cloud Shell · ' + c.rotulo, 'ok');
+    anotar('Suscripción: Azure for Students · directorio ' + c.dominio + ' · sesión del administrador de la suscripción.', 'dim');
+    anotar('Comience por el primer paso de la guía de laboratorio. Escriba help para ver los comandos disponibles.', 'dim');
     anotar('', '');
+  }
+  function comillasAbiertas(t) {
+    let q = null;
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      if (q === "'") { if (c === "'") q = null; continue; }
+      if (q === '"') { if (c === '\\') { i++; continue; } if (c === '"') q = null; continue; }
+      if (c === '\\') { i++; continue; }
+      if (c === "'" || c === '"') q = c;
+    }
+    return q !== null;
   }
   function procesar(linea) {
     const esperaba = sim.esperando();
@@ -825,6 +1050,7 @@ if (typeof module !== 'undefined') module.exports = { crearSimulador };
     }
     anotar((acumulado ? '> ' : sim.prompt()) + linea, 'cmd');
     if (/\\\s*$/.test(linea)) { acumulado += linea.replace(/\\\s*$/, ' '); actualizarPrompt(); return; }
+    if (comillasAbiertas(acumulado + linea)) { acumulado += linea + ' '; actualizarPrompt(); return; }
     const completo = acumulado + linea; acumulado = '';
     const r = sim.ejecutar(completo);
     if (r.out === '\u0000CLEAR') { transcripcion.push({ t: '[pantalla limpiada]', c: 'dim' }); sal.innerHTML = ''; }
@@ -852,17 +1078,53 @@ if (typeof module !== 'undefined') module.exports = { crearSimulador };
   bR.addEventListener('click', () => {
     if (!confirmar) { confirmar = true; bR.textContent = '¿Borrar todo? Confirme'; bR.style.borderColor = '#E30613'; setTimeout(() => { confirmar = false; bR.textContent = 'Reiniciar'; bR.style.borderColor = ''; }, 4000); return; }
     try { localStorage.removeItem(CLAVE); } catch (e) { }
-    sim = crearSimulador(null); transcripcion = []; acumulado = ''; sal.innerHTML = ''; confirmar = false; bR.textContent = 'Reiniciar'; bR.style.borderColor = '';
+    sim = crearSimulador(null, null, sel.value); transcripcion = []; acumulado = ''; sal.innerHTML = ''; confirmar = false; bR.textContent = 'Reiniciar'; bR.style.borderColor = '';
     bienvenida(); guardar(); actualizarPrompt(); ent.focus();
   });
   document.getElementById('bDescarga').addEventListener('click', () => {
     const g = (sim.estado().vars[Object.keys(sim.estado().vars)[0]] || {}).G || 'grupo';
     const f = new Date();
-    const cab = 'Transcripción · Simulador de Azure · Terminal de Buses Costa Azul\nTI3V62 · Gestión de Seguridad de la Información · Parte A\nGrupo: ' + g + ' · Descargada: ' + f.toLocaleString('es-CL') + '\n' + '='.repeat(72) + '\n\n';
-    const blob = new Blob([cab + transcripcion.map(l => l.t).join('\n') + '\n'], { type: 'text/plain;charset=utf-8' });
+    const cab = 'Transcripción · Simulador de Azure Cloud Shell\n' + CASOS[sim.caso()].rotulo + '\nGestión de Seguridad de la Información · INACAP Valparaíso\nIdentificador: ' + g + ' · Descargada: ' + f.toLocaleString('es-CL') + '\n' + '='.repeat(72) + '\n\n';
+    const cuerpo = transcripcion.map(l => (l.c === 'cmd' && l.h ? '[' + l.h + '] ' : '') + l.t).join('\n');
+    const blob = new Blob([cab + cuerpo + '\n'], { type: 'text/plain;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'transcripcion-azure-' + g + '-' + f.toISOString().slice(0, 16).replace(/[:T]/g, '') + '.txt';
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  sel.addEventListener('change', () => {
+    if (transcripcion.length <= 4) { sim = crearSimulador(null, null, sel.value); transcripcion = []; sal.innerHTML = ''; bienvenida(); guardar(); actualizarPrompt(); ent.focus(); return; }
+    anotar('Seleccionó ' + CASOS[sel.value].rotulo + '. Para trabajar con ese caso presione «Reiniciar» y confirme: la sesión actual se borrará. Descargue antes la transcripción si la necesita.', 'dim');
+    actualizarPrompt();
+  });
+  /* ---------- Portal de Entra simulado ---------- */
+  const portal = document.getElementById('portal'), pCuerpo = document.getElementById('pCuerpo');
+  let pestana = 'ingresos';
+  const COLS = {
+    ingresos: [['fecha', 'Fecha (UTC)'], ['usuario', 'Usuario'], ['aplicacion', 'Aplicación'], ['ip', 'Dirección IP'], ['estado', 'Estado'], ['codigo', 'Código de error'], ['motivo', 'Motivo del error']],
+    auditoria: [['fecha', 'Fecha (UTC)'], ['actividad', 'Actividad'], ['categoria', 'Categoría'], ['iniciadaPor', 'Iniciada por'], ['objetivo', 'Objetivo'], ['resultado', 'Resultado']],
+  };
+  const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  function pintarPortal() {
+    const d = sim.portal();
+    portal.querySelectorAll('.pest button[data-t]').forEach(b => b.classList.toggle('on', b.dataset.t === pestana));
+    if (!d.acceso) { pCuerpo.innerHTML = '<div class="bloq"><strong>Sin acceso (401).</strong> La cuenta ' + esc(sim.sesion()) + ' no tiene un rol de Entra que permita leer los registros. Vuelva a la sesión del administrador con az logout.</div>'; return; }
+    const filas = d[pestana];
+    if (!filas.length) { pCuerpo.innerHTML = '<div class="vacio">No hay registros todavía.</div>'; return; }
+    pCuerpo.innerHTML = '<table><thead><tr>' + COLS[pestana].map(c => '<th>' + c[1] + '</th>').join('') + '</tr></thead><tbody>' + filas.map(f => '<tr>' + COLS[pestana].map(c => '<td>' + esc(f[c[0]]) + '</td>').join('') + '</tr>').join('') + '</tbody></table>';
+  }
+  document.getElementById('bPortal').addEventListener('click', () => { pintarPortal(); portal.classList.remove('oculto'); });
+  document.getElementById('pCerrar').addEventListener('click', () => { portal.classList.add('oculto'); ent.focus(); });
+  portal.addEventListener('click', (e) => { if (e.target === portal) { portal.classList.add('oculto'); ent.focus(); } });
+  portal.querySelectorAll('.pest button[data-t]').forEach(b => b.addEventListener('click', () => { pestana = b.dataset.t; pintarPortal(); }));
+  document.getElementById('pCsv').addEventListener('click', () => {
+    const d = sim.portal(); if (!d.acceso) return;
+    const filas = d[pestana]; const cols = COLS[pestana];
+    const csv = [cols.map(c => c[1]).join(',')].concat(filas.map(f => cols.map(c => '"' + String(f[c[0]]).replace(/"/g, '""') + '"').join(','))).join('\n');
+    const nombre = (pestana === 'ingresos' ? 'InteractiveSignIns' : 'AuditLogs') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })); a.download = nombre;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    anotar('[Portal de Entra] ' + (pestana === 'ingresos' ? 'Registros de inicio de sesión' : 'Registros de auditoría') + ' descargados en ' + nombre + ' (' + filas.length + ' filas).', 'dim'); guardar();
   });
 
   if (transcripcion.length) reproducir(); else { bienvenida(); guardar(); }
